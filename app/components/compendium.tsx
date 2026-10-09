@@ -23,7 +23,7 @@ export default function Compendium({ bosses }: { bosses: CatalogueEntry[] }) {
   const [entries, setEntries] = useState(bosses);
   const [selectedId, setSelectedId] = useState(bosses[0]?.id ?? "");
   const [query, setQuery] = useState("");
-  const [activeSection, setActiveSection] = useState("Jefes");
+  const [activeSection, setActiveSection] = useState("Inicio");
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
@@ -34,7 +34,7 @@ export default function Compendium({ bosses }: { bosses: CatalogueEntry[] }) {
   const pageEntries = filtered.slice(page * pageSize, page * pageSize + pageSize);
 
   useEffect(() => {
-    if (activeSection === "Jefes") return;
+    if (activeSection === "Jefes" || activeSection === "Inicio") return;
     let mounted = true;
     fetch(`/api/catalogue?section=${encodeURIComponent(activeSection)}`).then((response) => response.json()).then((result: { data?: CatalogueEntry[] }) => {
       if (!mounted) return;
