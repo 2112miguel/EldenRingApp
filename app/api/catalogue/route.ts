@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
   if (name) upstream.searchParams.set("name", name);
 
   try {
-    const response = await fetch(upstream, { next: { revalidate: 3600 } });
+    const response = await fetch(upstream, { cache: "no-store" });
     if (!response.ok) throw new Error("Upstream service unavailable");
     const result = (await response.json()) as Partial<CatalogueResponse>;
     const data = Array.isArray(result.data) ? result.data.filter((entry) => Boolean(entry?.id && entry?.name)).map(normalizeEntry) : [];

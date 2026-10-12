@@ -55,7 +55,7 @@ export async function getBosses(): Promise<CatalogueResponse> {
   const baseUrl = process.env.ELDEN_RING_API_BASE_URL?.replace(/\/$/, "");
   if (!baseUrl) return { success: false, count: 0, total: 0, data: [] };
   try {
-    const response = await fetch(`${baseUrl}/api/bosses?page=0&limit=10`, { next: { revalidate: 3600 } });
+    const response = await fetch(`${baseUrl}/api/bosses?page=0&limit=10`, { cache: "no-store" });
     if (!response.ok) return { success: false, count: 0, total: 0, data: [] };
     const result = (await response.json()) as Partial<CatalogueResponse>;
     const data = Array.isArray(result.data) ? result.data.filter((entry): entry is CatalogueEntry => Boolean(entry?.id && entry?.name)).map(normalizeEntry) : [];
