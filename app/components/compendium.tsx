@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import { ArrowLeft, ArrowRight, Backpack, Brain, ChevronDown, ChevronRight, Crosshair, Crown, Dumbbell, Eye, EyeOff, Flame, FlaskConical, Gift, Hammer, Heart, House, MapPin, Package, ScrollText, Search, Shield, Shirt, Skull, Sparkles, Sun, Sword, WandSparkles, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { Attribute, CatalogueEntry } from "../lib/elden-ring";
+import { imageSource, type Attribute, type CatalogueEntry, type CatalogueResponse } from "../lib/elden-ring";
 
 type Section = { label: string; icon: LucideIcon };
 type Group = { label: string; icon: LucideIcon; sections: Section[] };
@@ -19,35 +19,39 @@ const groups: Group[] = [
 ];
 const pageSize = 10;
 
-export default function Compendium({ bosses }: { bosses: CatalogueEntry[] }) {
-  const [entries, setEntries] = useState(bosses);
-  const [selectedId, setSelectedId] = useState(bosses[0]?.id ?? "");
+export default function Compendium({ initialCatalogue }: { initialCatalogue: CatalogueResponse }) {
+  const [entries, setEntries] = useState(initialCatalogue.data);
+  const [selectedId, setSelectedId] = useState(initialCatalogue.data[0]?.id ?? "");
   const [query, setQuery] = useState("");
   const [activeSection, setActiveSection] = useState("Inicio");
   const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(initialCatalogue.total);
   const [loading, setLoading] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ Combate: true, Arsenal: true, Equipo: true, Magia: true, Mundo: true });
   const selected = entries.find((entry) => entry.id === selectedId) ?? entries[0];
-  const filtered = useMemo(() => entries.filter((entry) => entry.name.toLowerCase().includes(query.toLowerCase())), [entries, query]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  const pageEntries = filtered.slice(page * pageSize, page * pageSize + pageSize);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
   useEffect(() => {
-    if (activeSection === "Jefes" || activeSection === "Inicio") return;
+    if (activeSection === "Inicio") return;
+    if (activeSection === "Jefes" && page === 0 && !query) {
+      setEntries(initialCatalogue.data); setSelectedId(initialCatalogue.data[0]?.id ?? ""); setTotal(initialCatalogue.total); setLoading(false); return;
+    }
     let mounted = true;
-    fetch(`/api/catalogue?section=${encodeURIComponent(activeSection)}`).then((response) => response.json()).then((result: { data?: CatalogueEntry[] }) => {
+    const params = new URLSearchParams({ section: activeSection, page: String(page), limit: String(pageSize) });
+    if (query.trim()) params.set("name", query.trim());
+    fetch(`/api/catalogue?${params}`).then((response) => response.json()).then((result: CatalogueResponse) => {
       if (!mounted) return;
       const nextEntries = result.data ?? [];
-      setEntries(nextEntries); setSelectedId(nextEntries[0]?.id ?? "");
-    }).catch(() => { if (mounted) { setEntries([]); setSelectedId(""); } }).finally(() => { if (mounted) setLoading(false); });
+      setEntries(nextEntries); setSelectedId(nextEntries[0]?.id ?? ""); setTotal(result.total ?? 0);
+    }).catch(() => { if (mounted) { setEntries([]); setSelectedId(""); setTotal(0); } }).finally(() => { if (mounted) setLoading(false); });
     return () => { mounted = false; };
-  }, [activeSection]);
+  }, [activeSection, initialCatalogue, page, query]);
   useEffect(() => { const reveal = (event: KeyboardEvent) => { if (event.key === "Escape") setIsCinematic(false); }; window.addEventListener("keydown", reveal); return () => window.removeEventListener("keydown", reveal); }, []);
 
   const selectSection = (section: string) => {
     setActiveSection(section); setPage(0); setQuery(""); setLoading(section !== "Jefes");
-    if (section === "Jefes") { setEntries(bosses); setSelectedId(bosses[0]?.id ?? ""); }
+    if (section === "Jefes") { setEntries(initialCatalogue.data); setSelectedId(initialCatalogue.data[0]?.id ?? ""); setTotal(initialCatalogue.total); }
   };
   return <><video className="fixed inset-0 z-0 h-screen w-screen object-cover" autoPlay loop muted playsInline poster="/images/erdtree-kingdom.png"><source src="/video/elden-ring-leaves.webm" type="video/webm" /></video><main className={isCinematic ? "compendium-shell relative z-10 pointer-events-none opacity-0 transition-opacity duration-500" : "compendium-shell relative z-10 transition-opacity duration-500"}>
     <aside className="rail">
@@ -61,14 +65,14 @@ export default function Compendium({ bosses }: { bosses: CatalogueEntry[] }) {
       <header className="sticky top-0 z-20 flex h-16 items-center gap-5 border-b border-[color:var(--line)] bg-[#091314]/95 px-1 backdrop-blur-md"><div className="flex items-center gap-2 whitespace-nowrap text-base text-[#e5cf99]"><Sparkles className="size-5 text-[color:var(--gold)]" /><span>Tarnished Compendium</span></div><nav className="mr-auto flex items-center gap-1" aria-label="Navegación del compendio"><button onClick={() => setActiveSection("Inicio")} className={activeSection === "Inicio" ? "border-b border-[color:var(--gold)] px-2.5 py-2 text-sm text-[#eed498]" : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"}>Inicio</button><button onClick={() => selectSection("Jefes")} className={activeSection !== "Inicio" ? "border-b border-[color:var(--gold)] px-2.5 py-2 text-sm text-[#eed498]" : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"}>Compendio</button></nav><label className="flex h-10 w-[min(325px,42vw)] items-center gap-2 border border-[color:var(--line)] bg-[#040c0d]/60 px-3.5"><Search className="size-5 shrink-0 text-[color:var(--gold)]" /><input className="min-w-0 flex-1 bg-transparent py-2 text-[15px] text-[color:var(--paper)] outline-none placeholder:text-[#a69c8b]" value={query} onChange={(event) => { setQuery(event.target.value); setPage(0); }} placeholder="Buscar en la enciclopedia..." /></label></header>
       <div className="mobile-nav">{groups.flatMap((group) => group.sections).map((section) => <button key={section.label} onClick={() => selectSection(section.label)} className={activeSection === section.label ? "active" : ""}>{section.label}</button>)}</div>
       {activeSection === "Inicio" ? <HomePanel onOpenBosses={() => selectSection("Jefes")} /> : <section className="dashboard">
-        <aside className="catalogue panel"><div className="section-heading"><h2>{activeSection}</h2></div><p className="eyebrow">REGISTROS DISPONIBLES</p><div className="boss-list">{loading ? <p className="no-results">Invocando registros…</p> : pageEntries.map((entry) => <button onClick={() => setSelectedId(entry.id)} key={entry.id} className={entry.id === selected?.id ? "boss-row selected" : "boss-row"}><span className="boss-thumb"><img src={entry.image} alt="" /></span><span>{entry.name}</span></button>)}{!loading && !filtered.length && <p className="no-results">No hay registros con imagen para esta sección.</p>}</div>{filtered.length > pageSize && <div className="pagination"><Button variant="outline" size="icon" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} aria-label="Página anterior"><ArrowLeft /></Button><span>Página {page + 1} de {totalPages}</span><Button variant="outline" size="icon" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1} aria-label="Página siguiente"><ArrowRight /></Button></div>}</aside>
+        <aside className="catalogue panel"><div className="section-heading"><h2>{activeSection}</h2></div><p className="eyebrow">REGISTROS DISPONIBLES</p><div className="boss-list">{loading ? <p className="no-results">Invocando registros…</p> : entries.map((entry) => <button onClick={() => setSelectedId(entry.id)} key={entry.id} className={entry.id === selected?.id ? "boss-row selected" : "boss-row"}><span className="boss-thumb"><img src={imageSource(entry.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt="" /></span><span>{entry.name}</span></button>)}{!loading && !entries.length && <p className="no-results">No hay registros para esta sección.</p>}</div>{total > pageSize && <div className="pagination"><Button variant="outline" size="icon" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} aria-label="Página anterior"><ArrowLeft /></Button><span>Página {page + 1} de {totalPages}</span><Button variant="outline" size="icon" onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))} disabled={page >= totalPages - 1} aria-label="Página siguiente"><ArrowRight /></Button></div>}</aside>
         {selected && <Subject entry={selected} section={activeSection} />}{selected && <Details entry={selected} section={activeSection} />}
       </section>}
     </section>
   </main><div className={isCinematic ? "relative z-10 mt-6 w-full bg-transparent pb-6 opacity-0 transition-opacity duration-500" : "relative z-10 mt-6 w-full bg-transparent pb-6 transition-opacity duration-500"}><footer className="flex min-h-36 w-full flex-wrap items-center justify-center gap-x-8 gap-y-3 border-y border-[color:var(--line)] bg-[#081213]/90 px-8 py-8 text-xs leading-tight text-[#a99d85] md:px-20"><div className="flex items-center gap-2 text-[#d5c18b]"><Sparkles className="size-4 text-[color:var(--gold)]" /><span>Forjado en las Tierras Intermedias</span></div><p className="m-0">Diseñado y desarrollado por Miguel</p><a className="flex items-center gap-0.5 text-[#ddc487] hover:text-[#f5dfa8]" href="https://github.com/2112miguel" target="_blank" rel="noreferrer">GitHub <ChevronRight className="size-4" /></a><button className="inline-flex items-center gap-1.5 text-[#a99d85] transition hover:text-[#efd79c]" onClick={() => setIsCinematic((current) => !current)} aria-pressed={isCinematic}>{isCinematic ? <><Eye className="size-3.5" />Mostrar interfaz</> : <><EyeOff className="size-3.5" />Modo contemplación</>}</button></footer></div></>;
 }
 
-function Subject({ entry, section }: { entry: CatalogueEntry; section: string }) { return <section className="subject panel"><div className="subject-title"><p className="eyebrow">REGISTRO DE {section.toUpperCase()}</p><h1>{entry.name}</h1><span>{entry.category || entry.type || section}</span></div><div className="portrait-stage"><div className="halo" /><img className="boss-portrait" src={entry.image} alt={entry.name} /></div><div className="portrait-caption"><span>Registro del compendio</span></div></section>; }
+function Subject({ entry, section }: { entry: CatalogueEntry; section: string }) { return <section className="subject panel"><div className="subject-title"><p className="eyebrow">REGISTRO DE {section.toUpperCase()}</p><h1>{entry.name}</h1><span>{entry.category || entry.type || section}</span></div><div className="portrait-stage"><div className="halo" /><img className="boss-portrait" src={imageSource(entry.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt={entry.name} /></div><div className="portrait-caption"><span>Registro del compendio</span></div></section>; }
 
 function Details({ entry, section }: { entry: CatalogueEntry; section: string }) {
   const tabs = section === "Jefes" ? ["Información", "Estrategia", "Galería"] : ["Información", ...(entry.location ? ["Ubicación"] : []), "Galería"];
@@ -76,7 +80,7 @@ function Details({ entry, section }: { entry: CatalogueEntry; section: string })
     <TabsContent value="Información"><div className="detail-content"><p className="description">{entry.description || "No hay descripción disponible para este registro."}</p><InfoRows entry={entry} section={section} />{(section === "Armas" || section === "Escudos" || section === "Armaduras") && <EquipmentTables entry={entry} section={section} />}{section === "Jefes" && <BossInformation entry={entry} />}</div></TabsContent>
     {section !== "Jefes" && entry.location && <TabsContent value="Ubicación"><div className="detail-content"><p className="description">{entry.location}</p><div className="map-card"><MapPin /><p>Mapa y ruta detallada<br /><small>Disponible al publicar la guía</small></p><ChevronRight /></div></div></TabsContent>}
     {section === "Jefes" && <TabsContent value="Estrategia"><EmptyTab title="Estrategia en preparación" text="Este apartado se conectará con las guías curadas de la aplicación." /></TabsContent>}
-    <TabsContent value="Galería"><div className="detail-content"><div className="gallery-card"><img src={entry.image} alt={entry.name} /><p>Imagen principal del registro</p></div></div></TabsContent>
+    <TabsContent value="Galería"><div className="detail-content"><div className="gallery-card"><img src={imageSource(entry.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt={entry.name} /><p>Imagen principal del registro</p></div></div></TabsContent>
   </Tabs></aside>;
 }
 
