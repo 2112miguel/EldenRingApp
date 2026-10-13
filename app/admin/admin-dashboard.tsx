@@ -5,6 +5,14 @@ import { ArrowLeft, ImageIcon, LogOut, Save } from "lucide-react";
 import type { CatalogueEntry, CatalogueResponse } from "../lib/elden-ring";
 import { imageSource } from "../lib/elden-ring";
 
+type EditableValue = string | number | boolean | null;
+const pageSize = 20;
+const protectedFields = new Set(["id", "_id", "name", "image", "description"]);
+const fieldLabel = (field: string) =>
+  field
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (letter) => letter.toUpperCase());
+
 const sections = [
   "Jefes",
   "Enemigos",
@@ -28,7 +36,12 @@ export default function AdminDashboard() {
   const [name, setName] = useState("");
   const [image, setImage] = useState("");
   const [description, setDescription] = useState("");
+  const [extraFields, setExtraFields] = useState<Record<string, EditableValue>>(
+    {},
+  );
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const [total, setTotal] = useState(0);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -36,13 +49,14 @@ export default function AdminDashboard() {
     let alive = true;
     setLoading(true);
     fetch(
-      `/api/catalogue?section=${encodeURIComponent(section)}&page=0&limit=20`,
+      `/api/catalogue?section=${encodeURIComponent(section)}&page=${page}&limit=${pageSize}`,
     )
       .then((response) => response.json())
       .then((result: CatalogueResponse) => {
         if (!alive) return;
         const data = result.data ?? [];
         setEntries(data);
+        setTotal(result.total ?? data.length);
         select(data[0] ?? null);
       })
       .finally(() => {
@@ -51,12 +65,21 @@ export default function AdminDashboard() {
     return () => {
       alive = false;
     };
-  }, [section]);
+  }, [page, section]);
   function select(entry: CatalogueEntry | null) {
     setSelected(entry);
     setName(entry?.name ?? "");
     setImage(entry?.image ?? "");
     setDescription(entry?.description ?? "");
+    const editable = Object.fromEntries(
+      Object.entries(entry ?? {}).filter(
+        ([key, value]) =>
+          !protectedFields.has(key) &&
+          (value === null ||
+            ["string", "number", "boolean"].includes(typeof value)),
+      ),
+    ) as Record<string, EditableValue>;
+    setExtraFields(editable);
     setMessage("");
   }
   async function logout() {
@@ -72,6 +95,7 @@ export default function AdminDashboard() {
         name,
         image: image || null,
         description: description || null,
+        ...extraFields,
       };
       const response = await fetch("/api/admin/entries", {
         method: "PATCH",
@@ -83,7 +107,13 @@ export default function AdminDashboard() {
         setMessage(result.error ?? "No se pudieron guardar los cambios.");
         return;
       }
-      const updated = { ...selected, name, image: image || null, description };
+      const updated = {
+        ...selected,
+        ...extraFields,
+        name,
+        image: image || null,
+        description,
+      } as CatalogueEntry;
       setEntries((current) =>
         current.map((entry) => (entry.id === selected.id ? updated : entry)),
       );
@@ -130,7 +160,10 @@ export default function AdminDashboard() {
           {sections.map((item) => (
             <button
               key={item}
-              onClick={() => setSection(item)}
+              onClick={() => {
+                setSection(item);
+                setPage(0);
+              }}
               className={
                 section === item
                   ? "mb-1 w-full border-l-2 border-[color:var(--gold)] bg-[#5e4722]/30 px-3 py-2 text-left"
@@ -167,6 +200,31 @@ export default function AdminDashboard() {
                   <span>{entry.name}</span>
                 </button>
               ))}
+            </div>
+          )}
+          {total > pageSize && (
+            <div className="mt-5 flex items-center justify-between border-t border-[color:var(--line)] pt-4 text-sm text-[#bdb39e]">
+              <button
+                onClick={() => setPage((current) => Math.max(0, current - 1))}
+                disabled={page === 0}
+                className="border border-[color:var(--line)] px-3 py-2 disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <span>
+                Página {page + 1} de {Math.max(1, Math.ceil(total / pageSize))}
+              </span>
+              <button
+                onClick={() =>
+                  setPage((current) =>
+                    Math.min(Math.ceil(total / pageSize) - 1, current + 1),
+                  )
+                }
+                disabled={page >= Math.ceil(total / pageSize) - 1}
+                className="border border-[color:var(--line)] px-3 py-2 disabled:opacity-40"
+              >
+                Siguiente
+              </button>
             </div>
           )}
         </section>
@@ -211,6 +269,39 @@ export default function AdminDashboard() {
                   className="resize-y border border-[color:var(--line)] bg-transparent px-3 py-2 outline-none focus:border-[#d9bc7e]"
                 />
               </label>
+              {Object.entries(extraFields).map(([field, value]) => (
+                <label key={field} className="mt-4 grid gap-2 text-sm">
+                  {fieldLabel(field)}
+                  {typeof value === "boolean" ? (
+                    <input
+                      type="checkbox"
+                      checked={value}
+                      onChange={(event) =>
+                        setExtraFields((current) => ({
+                          ...current,
+                          [field]: event.target.checked,
+                        }))
+                      }
+                      className="size-4 accent-[#d9bc7e]"
+                    />
+                  ) : (
+                    <input
+                      type={typeof value === "number" ? "number" : "text"}
+                      value={value ?? ""}
+                      onChange={(event) =>
+                        setExtraFields((current) => ({
+                          ...current,
+                          [field]:
+                            typeof value === "number"
+                              ? Number(event.target.value)
+                              : event.target.value,
+                        }))
+                      }
+                      className="border border-[color:var(--line)] bg-transparent px-3 py-2 outline-none focus:border-[#d9bc7e]"
+                    />
+                  )}
+                </label>
+              ))}
               <button
                 onClick={save}
                 disabled={saving}
@@ -219,7 +310,17 @@ export default function AdminDashboard() {
                 <Save className="size-4" />
                 {saving ? "Guardando…" : "Guardar cambios"}
               </button>
-              {message && <p className={message === "Cambios guardados." ? "mt-3 text-xs text-emerald-300" : "mt-3 text-xs text-red-300"}>{message}</p>}
+              {message && (
+                <p
+                  className={
+                    message === "Cambios guardados."
+                      ? "mt-3 text-xs text-emerald-300"
+                      : "mt-3 text-xs text-red-300"
+                  }
+                >
+                  {message}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-[#bdb39e]">Selecciona un registro.</p>
