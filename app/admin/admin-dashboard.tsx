@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ImageIcon, LogOut, Save } from "lucide-react";
+import { ArrowLeft, ImageIcon, LogOut, Plus, Save, Search } from "lucide-react";
 import type { CatalogueEntry, CatalogueResponse } from "../lib/elden-ring";
 import { imageSource } from "../lib/elden-ring";
 
@@ -27,6 +27,8 @@ const sections = [
   "Hechicerías",
   "Encantamientos",
   "Áreas",
+  "Clases",
+  "NPCs",
 ];
 
 export default function AdminDashboard() {
@@ -41,15 +43,18 @@ export default function AdminDashboard() {
   );
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [query, setQuery] = useState("");
   const [total, setTotal] = useState(0);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newField, setNewField] = useState("");
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
     fetch(
-      `/api/catalogue?section=${encodeURIComponent(section)}&page=${page}&limit=${pageSize}`,
+      `/api/catalogue?section=${encodeURIComponent(query.trim() ? "Todos" : section)}&page=${page}&limit=${pageSize}${query.trim() ? `&name=${encodeURIComponent(query.trim())}` : ""}`,
     )
       .then((response) => response.json())
       .then((result: CatalogueResponse) => {
@@ -65,8 +70,9 @@ export default function AdminDashboard() {
     return () => {
       alive = false;
     };
-  }, [page, section]);
+  }, [page, query, section]);
   function select(entry: CatalogueEntry | null) {
+    setCreating(false);
     setSelected(entry);
     setName(entry?.name ?? "");
     setImage(entry?.image ?? "");
@@ -87,7 +93,7 @@ export default function AdminDashboard() {
     window.location.assign("/");
   }
   async function save() {
-    if (!selected) return;
+    if (!selected && !creating) return;
     setSaving(true);
     setMessage("");
     try {
@@ -98,9 +104,17 @@ export default function AdminDashboard() {
         ...extraFields,
       };
       const response = await fetch("/api/admin/entries", {
-        method: "PATCH",
+        method: creating ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ section, id: selected.id, changes }),
+        body: JSON.stringify(
+          creating
+            ? { section, values: changes }
+            : {
+                section: selected!.sourceSection ?? section,
+                id: selected!.id,
+                changes,
+              },
+        ),
       });
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success) {
@@ -108,22 +122,38 @@ export default function AdminDashboard() {
         return;
       }
       const updated = {
-        ...selected,
+        ...(selected ?? {}),
         ...extraFields,
+        id: creating ? result.id : selected!.id,
         name,
         image: image || null,
         description,
       } as CatalogueEntry;
       setEntries((current) =>
-        current.map((entry) => (entry.id === selected.id ? updated : entry)),
+        creating
+          ? [updated, ...current]
+          : current.map((entry) =>
+              entry.id === selected!.id ? updated : entry,
+            ),
       );
+      if (creating) setTotal((current) => current + 1);
       setSelected(updated);
+      setCreating(false);
       setMessage("Cambios guardados.");
     } catch {
       setMessage("No fue posible conectar con el servidor.");
     } finally {
       setSaving(false);
     }
+  }
+  function startCreation() {
+    setSelected(null);
+    setCreating(true);
+    setName("");
+    setImage("");
+    setDescription("");
+    setExtraFields(section === "Jefes" ? { region: "", healthPoints: "" } : {});
+    setMessage("");
   }
 
   return (
@@ -136,6 +166,13 @@ export default function AdminDashboard() {
           <h1 className="mt-1 text-3xl">Tarnished Compendium</h1>
         </div>
         <div className="flex gap-3">
+          <button
+            onClick={startCreation}
+            className="inline-flex items-center gap-2 border border-[color:var(--gold)] px-3 py-2 text-sm text-[#efd79c]"
+          >
+            <Plus className="size-4" />
+            Nuevo
+          </button>
           <a
             href="/"
             className="inline-flex items-center gap-2 border border-[color:var(--line)] px-3 py-2 text-sm text-[#d5c18b]"
@@ -163,6 +200,7 @@ export default function AdminDashboard() {
               onClick={() => {
                 setSection(item);
                 setPage(0);
+                setQuery("");
               }}
               className={
                 section === item
@@ -176,8 +214,20 @@ export default function AdminDashboard() {
         </aside>
         <section className="border border-[color:var(--line)] bg-[#0b1718] p-4">
           <p className="mb-4 text-xs tracking-[.14em] text-[#b7a476]">
-            {section.toUpperCase()}
+            {query.trim() ? "RESULTADOS" : section.toUpperCase()}
           </p>
+          <label className="mb-4 flex items-center gap-2 border border-[color:var(--line)] bg-black/10 px-3 py-2">
+            <Search className="size-4 text-[color:var(--gold)]" />
+            <input
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setPage(0);
+              }}
+              placeholder="Buscar en todo el compendio..."
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-[#a99d85]"
+            />
+          </label>
           {loading ? (
             <p className="text-[#bdb39e]">Cargando registros…</p>
           ) : (
@@ -197,7 +247,14 @@ export default function AdminDashboard() {
                     src={imageSource(entry.image)}
                     alt=""
                   />
-                  <span>{entry.name}</span>
+                  <span>
+                    {entry.name}
+                    {query.trim() && entry.sourceSection ? (
+                      <small className="mt-1 block text-xs text-[#b7a476]">
+                        {entry.sourceSection}
+                      </small>
+                    ) : null}
+                  </span>
                 </button>
               ))}
             </div>
@@ -231,11 +288,15 @@ export default function AdminDashboard() {
         <section className="border border-[color:var(--line)] bg-[#0b1718] p-5">
           <div className="mb-5 flex items-center gap-2">
             <ImageIcon className="size-5 text-[color:var(--gold)]" />
-            <h2 className="text-xl">Editar registro</h2>
+            <h2 className="text-xl">
+              {creating ? "Nuevo registro" : "Editar registro"}
+            </h2>
           </div>
-          {selected ? (
+          {selected || creating ? (
             <>
-              <p className="mb-5 text-sm text-[#d5c18b]">{selected.name}</p>
+              {!creating && (
+                <p className="mb-5 text-sm text-[#d5c18b]">{selected?.name}</p>
+              )}
               <label className="mb-4 grid gap-2 text-sm">
                 Nombre
                 <input
@@ -302,13 +363,42 @@ export default function AdminDashboard() {
                   )}
                 </label>
               ))}
+              {creating && (
+                <div className="mt-4 flex gap-2">
+                  <input
+                    value={newField}
+                    onChange={(event) => setNewField(event.target.value)}
+                    placeholder="Campo adicional, ej. region"
+                    className="min-w-0 flex-1 border border-[color:var(--line)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[#d9bc7e]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const field = newField.trim();
+                      if (!field || protectedFields.has(field)) return;
+                      setExtraFields((current) => ({
+                        ...current,
+                        [field]: "",
+                      }));
+                      setNewField("");
+                    }}
+                    className="border border-[color:var(--line)] px-3 text-sm text-[#d5c18b]"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              )}
               <button
                 onClick={save}
                 disabled={saving}
                 className="mt-5 inline-flex w-full items-center justify-center gap-2 border border-[color:var(--gold)] px-4 py-3 text-sm text-[#efd79c] disabled:cursor-wait disabled:opacity-60"
               >
                 <Save className="size-4" />
-                {saving ? "Guardando…" : "Guardar cambios"}
+                {saving
+                  ? "Guardando…"
+                  : creating
+                    ? "Crear registro"
+                    : "Guardar cambios"}
               </button>
               {message && (
                 <p

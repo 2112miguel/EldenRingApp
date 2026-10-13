@@ -1,12 +1,19 @@
 export type Attribute = { name: string; amount?: number; scaling?: string };
-export type RecordReference = { id?: string; collection: string; name: string; kind?: "record" | "currency" };
+export type RecordReference = {
+  id?: string;
+  collection: string;
+  name: string;
+  kind?: "record" | "currency";
+};
 
 export type CatalogueEntry = {
   id: string;
+  sourceSection?: string;
   name: string;
   image: string | null;
   description: string;
   location?: string | RecordReference | null;
+  region?: string | null;
   drops?: (string | RecordReference)[];
   healthPoints?: string | number;
   category?: string;
@@ -31,24 +38,45 @@ export type CatalogueEntry = {
   resistance?: Attribute[];
 };
 
-export type CatalogueResponse = { success: boolean; count: number; total: number; data: CatalogueEntry[] };
+export type CatalogueResponse = {
+  success: boolean;
+  count: number;
+  total: number;
+  data: CatalogueEntry[];
+};
 export const IMAGE_PLACEHOLDER = "/images/entry-placeholder.svg";
 
 export function imageSource(image?: string | null) {
   return image?.trim() ? image : IMAGE_PLACEHOLDER;
 }
 
-const attributeFields = ["requires", "requiredAttributes", "scalesWith", "attackPower", "attack", "defence", "dmgNegation", "resistance"] as const;
+const attributeFields = [
+  "requires",
+  "requiredAttributes",
+  "scalesWith",
+  "attackPower",
+  "attack",
+  "defence",
+  "dmgNegation",
+  "resistance",
+] as const;
 
 function attributes(value: unknown): Attribute[] | undefined {
-  const values = Array.isArray(value) ? value : value && typeof value === "object" ? Object.values(value) : [];
-  const valid = values.filter((value): value is Attribute => Boolean(value && typeof value === "object" && "name" in value));
+  const values = Array.isArray(value)
+    ? value
+    : value && typeof value === "object"
+      ? Object.values(value)
+      : [];
+  const valid = values.filter((value): value is Attribute =>
+    Boolean(value && typeof value === "object" && "name" in value),
+  );
   return valid.length ? valid : undefined;
 }
 
 export function normalizeEntry(entry: CatalogueEntry): CatalogueEntry {
   const normalized = { ...entry } as CatalogueEntry;
-  for (const field of attributeFields) normalized[field] = attributes(entry[field]);
+  for (const field of attributeFields)
+    normalized[field] = attributes(entry[field]);
   return normalized;
 }
 
@@ -56,10 +84,25 @@ export async function getBosses(): Promise<CatalogueResponse> {
   const baseUrl = process.env.ELDEN_RING_API_BASE_URL?.replace(/\/$/, "");
   if (!baseUrl) return { success: false, count: 0, total: 0, data: [] };
   try {
-    const response = await fetch(`${baseUrl}/api/bosses?page=0&limit=10`, { cache: "no-store" });
+    const response = await fetch(`${baseUrl}/api/bosses?page=0&limit=10`, {
+      cache: "no-store",
+    });
     if (!response.ok) return { success: false, count: 0, total: 0, data: [] };
     const result = (await response.json()) as Partial<CatalogueResponse>;
-    const data = Array.isArray(result.data) ? result.data.filter((entry): entry is CatalogueEntry => Boolean(entry?.id && entry?.name)).map(normalizeEntry) : [];
-    return { success: result.success === true, count: Number(result.count ?? data.length), total: Number(result.total ?? data.length), data };
-  } catch { return { success: false, count: 0, total: 0, data: [] }; }
+    const data = Array.isArray(result.data)
+      ? result.data
+          .filter((entry): entry is CatalogueEntry =>
+            Boolean(entry?.id && entry?.name),
+          )
+          .map(normalizeEntry)
+      : [];
+    return {
+      success: result.success === true,
+      count: Number(result.count ?? data.length),
+      total: Number(result.total ?? data.length),
+      data,
+    };
+  } catch {
+    return { success: false, count: 0, total: 0, data: [] };
+  }
 }
