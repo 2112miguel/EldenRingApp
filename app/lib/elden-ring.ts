@@ -1,13 +1,14 @@
 export type Attribute = { name: string; amount?: number; scaling?: string };
+export type RecordReference = { id?: string; collection: string; name: string; kind?: "record" | "currency" };
 
 export type CatalogueEntry = {
   id: string;
   name: string;
   image: string | null;
   description: string;
-  location?: string;
-  drops?: string[];
-  healthPoints?: string;
+  location?: string | RecordReference | null;
+  drops?: (string | RecordReference)[];
+  healthPoints?: string | number;
   category?: string;
   type?: string;
   weight?: number;
