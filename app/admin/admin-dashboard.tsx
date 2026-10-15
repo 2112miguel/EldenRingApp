@@ -1,7 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowLeft, ImageIcon, LogOut, Plus, Save, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  BookOpen,
+  ImageIcon,
+  LogOut,
+  Plus,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import type { CatalogueEntry, CatalogueResponse } from "../lib/elden-ring";
 import { imageSource } from "../lib/elden-ring";
 
@@ -146,6 +155,38 @@ export default function AdminDashboard() {
       setSaving(false);
     }
   }
+  async function remove() {
+    if (!selected || creating) return;
+    const confirmation = `DELETE ${selected.name} [${selected.id}]`;
+    if (!window.confirm(`¿Eliminar definitivamente “${selected.name}”?`))
+      return;
+    setSaving(true);
+    setMessage("");
+    try {
+      const response = await fetch("/api/admin/entries", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          section: selected.sourceSection ?? section,
+          id: selected.id,
+          confirmation,
+        }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result.success) {
+        setMessage(result.error ?? "No se pudo eliminar el registro.");
+        return;
+      }
+      setEntries((current) => current.filter((entry) => entry.id !== selected.id));
+      setTotal((current) => Math.max(0, current - 1));
+      select(null);
+      setMessage("Registro eliminado.");
+    } catch {
+      setMessage("No fue posible conectar con el servidor.");
+    } finally {
+      setSaving(false);
+    }
+  }
   function startCreation() {
     setSelected(null);
     setCreating(true);
@@ -166,6 +207,20 @@ export default function AdminDashboard() {
           <h1 className="mt-1 text-3xl">Tarnished Compendium</h1>
         </div>
         <div className="flex gap-3">
+          <a
+            href="/admin/guides"
+            className="inline-flex items-center gap-2 border border-[color:var(--line)] px-3 py-2 text-sm text-[#d5c18b]"
+          >
+            <BookOpen className="size-4" />
+            Guías
+          </a>
+          <a
+            href="/admin/drafts"
+            className="inline-flex items-center gap-2 border border-[color:var(--line)] px-3 py-2 text-sm text-[#d5c18b]"
+          >
+            <BookOpen className="size-4" />
+            Gestionar guías
+          </a>
           <button
             onClick={startCreation}
             className="inline-flex items-center gap-2 border border-[color:var(--gold)] px-3 py-2 text-sm text-[#efd79c]"
@@ -400,6 +455,16 @@ export default function AdminDashboard() {
                     ? "Crear registro"
                     : "Guardar cambios"}
               </button>
+              {!creating && (
+                <button
+                  type="button"
+                  onClick={remove}
+                  disabled={saving}
+                  className="mt-3 inline-flex w-full items-center justify-center gap-2 border border-red-400/60 px-4 py-3 text-sm text-red-200 disabled:opacity-60"
+                >
+                  <Trash2 className="size-4" /> Eliminar registro
+                </button>
+              )}
               {message && (
                 <p
                   className={

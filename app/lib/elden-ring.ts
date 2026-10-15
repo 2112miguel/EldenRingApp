@@ -2,16 +2,61 @@ export type Attribute = { name: string; amount?: number; scaling?: string };
 export type RecordReference = {
   id?: string;
   collection: string;
-  name: string;
+  name: string | null;
+  image?: string | null;
   kind?: "record" | "currency";
 };
-
+export type GuideSummary = { id: string; title: string; status: "published" };
+export type Guide = {
+  id: string;
+  title: string;
+  summary?: string;
+  sections: {
+    order: number;
+    title: string;
+    content: string;
+    references?: RecordReference[];
+    subsections?: {
+      order: number;
+      title: string;
+      content: string;
+      references?: RecordReference[];
+    }[];
+  }[];
+  supplements?: {
+    id: string;
+    order?: number;
+    type:
+      | "tip"
+      | "warning"
+      | "mechanic"
+      | "lore"
+      | "npc-note"
+      | "checklist"
+      | "external-link";
+    title: string;
+    content: string;
+    image?: string | null;
+    references?: RecordReference[];
+    subsections?: {
+      order: number;
+      title: string;
+      content: string;
+      image?: string | null;
+      references?: RecordReference[];
+    }[];
+  }[];
+  media?: { type: string; url: string; alt?: string }[];
+};
 export type CatalogueEntry = {
   id: string;
   sourceSection?: string;
+  guide?: GuideSummary | null;
   name: string;
   image: string | null;
   description: string;
+  quote?: string | null;
+  role?: string | null;
   location?: string | RecordReference | null;
   region?: string | null;
   drops?: (string | RecordReference)[];
@@ -75,6 +120,13 @@ function attributes(value: unknown): Attribute[] | undefined {
 
 export function normalizeEntry(entry: CatalogueEntry): CatalogueEntry {
   const normalized = { ...entry } as CatalogueEntry;
+  if (!normalized.description?.trim())
+    normalized.description =
+      (typeof entry.quote === "string" && entry.quote.trim()) ||
+      (typeof entry.role === "string" && entry.role.trim()) ||
+      "";
+  if (!normalized.category && typeof entry.role === "string")
+    normalized.category = entry.role;
   for (const field of attributeFields)
     normalized[field] = attributes(entry[field]);
   return normalized;

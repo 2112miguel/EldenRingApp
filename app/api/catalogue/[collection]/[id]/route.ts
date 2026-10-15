@@ -18,6 +18,8 @@ const collections = new Set([
   "sorceries",
   "incantations",
   "locations",
+  "classes",
+  "npcs",
 ]);
 
 export async function GET(

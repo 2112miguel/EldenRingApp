@@ -135,3 +135,56 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  const token = request.cookies.get("elden_admin_token")?.value;
+  if (!token)
+    return NextResponse.json(
+      { success: false, error: "Sesión de administrador requerida." },
+      { status: 401 },
+    );
+  const payload = await request.json().catch(() => null);
+  const section = payload?.section;
+  const id = payload?.id;
+  const confirmation = payload?.confirmation;
+  const endpoint = typeof section === "string" ? endpoints[section] : undefined;
+  if (!endpoint || typeof id !== "string" || !id || typeof confirmation !== "string")
+    return NextResponse.json(
+      { success: false, error: "Solicitud de borrado inválida." },
+      { status: 400 },
+    );
+  const baseUrl = process.env.ELDEN_RING_API_BASE_URL?.replace(/\/$/, "");
+  if (!baseUrl)
+    return NextResponse.json(
+      { success: false, error: "Backend no configurado." },
+      { status: 500 },
+    );
+  try {
+    const upstream = await fetch(
+      `${baseUrl}/api/${endpoint}/${encodeURIComponent(id)}`,
+      {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ confirmation }),
+        cache: "no-store",
+      },
+    );
+    const raw = await upstream.text();
+    let result: { success?: boolean; error?: string };
+    try {
+      result = raw ? JSON.parse(raw) : upstream.ok ? { success: true } : {};
+    } catch {
+      result = upstream.ok
+        ? { success: true }
+        : { error: `El backend respondió ${upstream.status}.` };
+    }
+    if (!upstream.ok && !result.error)
+      result.error = `El backend respondió ${upstream.status}.`;
+    return NextResponse.json(result, { status: upstream.status });
+  } catch {
+    return NextResponse.json(
+      { success: false, error: "No fue posible eliminar el registro." },
+      { status: 502 },
+    );
+  }
+}

@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   Backpack,
+  BookOpen,
   Brain,
   ChevronDown,
   ChevronRight,
@@ -33,6 +34,7 @@ import {
   Sparkles,
   Sun,
   Sword,
+  Users,
   WandSparkles,
   Zap,
 } from "lucide-react";
@@ -43,6 +45,7 @@ import {
   type Attribute,
   type CatalogueEntry,
   type CatalogueResponse,
+  type Guide,
   type RecordReference,
 } from "../lib/elden-ring";
 
@@ -56,6 +59,23 @@ type NavigationSnapshot = {
   total: number;
   query: string;
   linkedEntry: CatalogueEntry | null;
+};
+const sectionCollections: Record<string, string> = {
+  Jefes: "bosses",
+  Enemigos: "creatures",
+  Armas: "weapons",
+  Munición: "ammos",
+  Armaduras: "armors",
+  Escudos: "shields",
+  Talismanes: "talismans",
+  Objetos: "items",
+  Invocaciones: "spirits",
+  "Cenizas de guerra": "ashes",
+  Hechicerías: "sorceries",
+  Encantamientos: "incantations",
+  Áreas: "locations",
+  Clases: "classes",
+  NPCs: "npcs",
 };
 
 const groups: Group[] = [
@@ -98,7 +118,11 @@ const groups: Group[] = [
   {
     label: "Mundo",
     icon: MapPin,
-    sections: [{ label: "Áreas", icon: MapPin }],
+    sections: [
+      { label: "Áreas", icon: MapPin },
+      { label: "Clases", icon: Dumbbell },
+      { label: "NPCs", icon: Users },
+    ],
   },
 ];
 const pageSize = 10;
@@ -116,6 +140,8 @@ const collectionSections: Record<string, string> = {
   sorceries: "Hechicerías",
   incantations: "Encantamientos",
   locations: "Áreas",
+  classes: "Clases",
+  npcs: "NPCs",
 };
 const isNavigable = (
   reference: RecordReference,
@@ -160,6 +186,27 @@ export default function Compendium({
       ? (selected?.sourceSection ?? "Resultados")
       : activeSection;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const collection = params.get("referenceCollection");
+    const id = params.get("referenceId");
+    const targetSection = collection ? collectionSections[collection] : undefined;
+    if (!collection || !id || !targetSection) return;
+    let alive = true;
+    setLoading(true);
+    fetch(`/api/catalogue/${encodeURIComponent(collection)}/${encodeURIComponent(id)}`)
+      .then((response) => response.json())
+      .then((result) => {
+        if (!alive || !result.success || !result.data) return;
+        setLinkedEntry(result.data as CatalogueEntry);
+        setActiveSection(targetSection);
+        setPage(0);
+        setQuery("");
+      })
+      .finally(() => alive && setLoading(false));
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     if (linkedEntry) {
@@ -220,6 +267,32 @@ export default function Compendium({
       .then((result) => setIsAdmin(Boolean(result.authenticated)))
       .catch(() => setIsAdmin(false));
   }, []);
+  useEffect(() => {
+    const entry = entries.find((item) => item.id === selectedId);
+    const sourceSection =
+      activeSection === "Todos" ? entry?.sourceSection : activeSection;
+    const collection = sourceSection
+      ? sectionCollections[sourceSection]
+      : undefined;
+    if (!entry || !collection) return;
+    let alive = true;
+    fetch(`/api/catalogue/${collection}/${entry.id}`)
+      .then((response) => response.json())
+      .then((result) => {
+        if (!alive || !result.success || !result.data) return;
+        setEntries((current) =>
+          current.map((item) =>
+            item.id === entry.id
+              ? { ...result.data, sourceSection: item.sourceSection }
+              : item,
+          ),
+        );
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [activeSection, selectedId]);
 
   const selectSection = (section: string) => {
     setLinkedEntry(null);
@@ -394,6 +467,13 @@ export default function Compendium({
               >
                 Compendio
               </button>
+              <a
+                href="/guides"
+                className="inline-flex items-center gap-1 border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"
+              >
+                <BookOpen className="size-3.5" />
+                Guías
+              </a>
             </nav>
             <label className="flex h-10 w-[min(325px,42vw)] items-center gap-2 border border-[color:var(--line)] bg-[#040c0d]/60 px-3.5">
               <Search className="size-5 shrink-0 text-[color:var(--gold)]" />
@@ -460,7 +540,11 @@ export default function Compendium({
               ))}
           </div>
           {activeSection === "Inicio" ? (
-            <HomePanel onOpenBosses={() => selectSection("Jefes")} />
+            <HomePanel
+              onOpenBosses={() => selectSection("Jefes")}
+              onOpenArsenal={() => selectSection("Armas")}
+              onOpenClasses={() => selectSection("Clases")}
+            />
           ) : (
             <section className="dashboard">
               <aside className="catalogue panel">
@@ -650,13 +734,26 @@ function Details({
   section: string;
   onOpenReference: (reference: RecordReference) => void;
 }) {
+  const [activeTab, setActiveTab] = useState("Información");
+  useEffect(() => setActiveTab("Información"), [entry.id]);
+  const hasStrategy =
+    section === "Jefes" || entry.guide?.status === "published";
   const tabs =
     section === "Jefes"
       ? ["Información", "Estrategia", "Galería"]
-      : ["Información", ...(entry.location ? ["Ubicación"] : []), "Galería"];
+      : [
+          "Información",
+          ...(hasStrategy ? ["Estrategia"] : []),
+          ...(entry.location ? ["Ubicación"] : []),
+          "Galería",
+        ];
   return (
     <aside className="details panel">
-      <Tabs defaultValue="Información" className="compendium-tabs">
+      <Tabs
+        value={activeTab}
+        onValueChange={setActiveTab}
+        className="compendium-tabs"
+      >
         <TabsList variant="line" className="tabs">
           {tabs.map((tab) => (
             <TabsTrigger key={tab} value={tab}>
@@ -702,11 +799,12 @@ function Details({
             </div>
           </TabsContent>
         )}
-        {section === "Jefes" && (
+        {hasStrategy && (
           <TabsContent value="Estrategia">
-            <EmptyTab
-              title="Estrategia en preparación"
-              text="Este apartado se conectará con las guías curadas de la aplicación."
+            <GuideStrategy
+              entry={entry}
+              section={section}
+              active={activeTab === "Estrategia"}
             />
           </TabsContent>
         )}
@@ -726,6 +824,144 @@ function Details({
         </TabsContent>
       </Tabs>
     </aside>
+  );
+}
+
+function GuideStrategy({
+  entry,
+  section,
+  active,
+}: {
+  entry: CatalogueEntry;
+  section: string;
+  active: boolean;
+}) {
+  const [guide, setGuide] = useState<Guide | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    if (!active || !entry.guide) return;
+    const collection = sectionCollections[section];
+    if (!collection) return;
+    let alive = true;
+    setLoading(true);
+    setError("");
+    fetch(`/api/guides/${collection}/${entry.id}`)
+      .then((response) =>
+        response.json().then((result) => ({ response, result })),
+      )
+      .then(({ response, result }) => {
+        if (!alive) return;
+        if (!response.ok || !result.success || !result.data) {
+          setError("La guía no está disponible.");
+          return;
+        }
+        setGuide(result.data as Guide);
+      })
+      .catch(() => {
+        if (alive) setError("No fue posible cargar la guía.");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [active, entry.guide, entry.id, section]);
+  if (!entry.guide)
+    return (
+      <EmptyTab
+        title="Estrategia en preparación"
+        text="Este registro todavía no tiene una guía publicada."
+      />
+    );
+  if (!active || loading)
+    return (
+      <div className="detail-content">
+        <p className="value-muted">Cargando guía…</p>
+      </div>
+    );
+  if (error || !guide)
+    return (
+      <EmptyTab
+        title="Guía no disponible"
+        text={error || "No fue posible cargar esta guía."}
+      />
+    );
+  return (
+    <div className="detail-content">
+      <p className="eyebrow">GUÍA PUBLICADA</p>
+      <h3 className="mb-3 text-2xl text-[#e8ddc5]">{guide.title}</h3>
+      {guide.summary && <p className="description">{guide.summary}</p>}
+      {guide.sections
+        .sort((a, b) => a.order - b.order)
+        .map((item) => (
+          <section
+            key={item.order}
+            className="border-t border-[color:var(--line)] py-4"
+          >
+            <h4 className="text-lg text-[#e5cf99]">{item.title}</h4>
+            <p className="mt-2 leading-relaxed text-[#cfc3ad]">
+              {item.content}
+            </p>
+            {item.subsections
+              ?.sort((a, b) => a.order - b.order)
+              .map((subsection) => (
+                <div
+                  key={subsection.order}
+                  className="mt-4 border-l border-[color:var(--line)] pl-4"
+                >
+                  <h5 className="text-base text-[#d8c998]">
+                    {subsection.title}
+                  </h5>
+                  <p className="mt-1 leading-relaxed text-[#cfc3ad]">
+                    {subsection.content}
+                  </p>
+                </div>
+              ))}
+          </section>
+        ))}
+      {guide.supplements && guide.supplements.length > 0 && (
+        <section className="border-t border-[color:var(--line)] py-4">
+          <h4 className="text-lg text-[#e5cf99]">Notas de la guía</h4>
+          <div className="mt-3 grid gap-3">
+            {guide.supplements.map((supplement) => (
+              <article
+                key={supplement.id}
+                className="border border-[color:var(--line)] bg-black/10 p-4"
+              >
+                <p className="text-xs tracking-[.14em] text-[#b7a476]">
+                  {supplement.type}
+                </p>
+                <h5 className="mt-1 text-base text-[#ead9ad]">
+                  {supplement.title}
+                </h5>
+                <p className="mt-2 leading-relaxed text-[#cfc3ad]">
+                  {supplement.content}
+                </p>
+                {supplement.image && (
+                  <img
+                    className="mt-3 max-h-72 w-full border border-[color:var(--line)] object-cover"
+                    src={supplement.image}
+                    alt={supplement.title}
+                  />
+                )}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+      {guide.media
+        ?.filter((media) => media.type === "image")
+        .map((media) => (
+          <img
+            key={media.url}
+            className="mt-4 w-full border border-[color:var(--line)]"
+            src={media.url}
+            alt={media.alt ?? "Imagen de la guía"}
+          />
+        ))}
+    </div>
   );
 }
 
@@ -1193,7 +1429,15 @@ function statIcon(name: string): LucideIcon {
     )[name] || Sparkles
   );
 }
-function HomePanel({ onOpenBosses }: { onOpenBosses: () => void }) {
+function HomePanel({
+  onOpenBosses,
+  onOpenArsenal,
+  onOpenClasses,
+}: {
+  onOpenBosses: () => void;
+  onOpenArsenal: () => void;
+  onOpenClasses: () => void;
+}) {
   return (
     <section className="home-panel panel">
       <div className="home-copy">
@@ -1226,19 +1470,36 @@ function HomePanel({ onOpenBosses }: { onOpenBosses: () => void }) {
       </div>
       <div className="home-sections">
         <article>
-          <Crown />
-          <h2>Jefes</h2>
-          <p>Recompensas, vida y ubicación.</p>
+          <button onClick={onOpenBosses} className="p-0 text-left">
+            <Crown />
+            <h2>Jefes</h2>
+            <p>Recompensas, vida y ubicación.</p>
+          </button>
         </article>
         <article>
-          <Sword />
-          <h2>Arsenal</h2>
-          <p>Armas, escudos y munición.</p>
+          <button onClick={onOpenArsenal} className="p-0 text-left">
+            <Sword />
+            <h2>Arsenal</h2>
+            <p>Armas, escudos y munición.</p>
+          </button>
         </article>
         <article>
-          <MapPin />
-          <h2>Guías</h2>
-          <p>Rutas y misiones hechas por la comunidad.</p>
+          <a
+            href="/guides"
+            className="home-section-link block text-inherit no-underline"
+            aria-label="Explorar guías"
+          >
+            <MapPin />
+            <h2>Guías</h2>
+            <p>Rutas y misiones hechas por la comunidad.</p>
+          </a>
+        </article>
+        <article>
+          <button onClick={onOpenClasses} className="p-0 text-left">
+            <Dumbbell />
+            <h2>Clases</h2>
+            <p>Orígenes, atributos y equipo inicial.</p>
+          </button>
         </article>
       </div>
     </section>
