@@ -73,6 +73,7 @@ type GuideSubsection = {
   content: string;
   referenceCollection: string;
   references: PickedRecord[];
+  subsections?: GuideSubsection[];
 };
 type GuideSection = {
   title: string;
@@ -93,11 +94,38 @@ type Supplement = {
   subsections: GuideSubsection[];
 };
 
+function SubsubsectionEditor({
+  item,
+  onChange,
+  onRemove,
+}: {
+  item: GuideSubsection;
+  onChange: (next: GuideSubsection) => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div className="grid gap-3 border-l-2 border-[#7f6b35] bg-black/10 p-3">
+      <div className="flex justify-between text-xs text-[#b7a476]">
+        <span>SUBSUBSECCIÓN</span>
+        <button type="button" onClick={onRemove} className="text-red-300">Quitar</button>
+      </div>
+      <input value={item.title} onChange={(event) => onChange({ ...item, title: event.target.value })} placeholder="Título de la subsubsección" className="border border-[color:var(--line)] bg-transparent px-3 py-2" />
+      <textarea value={item.content} onChange={(event) => onChange({ ...item, content: event.target.value })} placeholder="Contenido de la subsubsección" rows={3} className="border border-[color:var(--line)] bg-transparent px-3 py-2" />
+      <label className="grid gap-2 text-sm">Colección de referencias<select value={item.referenceCollection} onChange={(event) => onChange({ ...item, referenceCollection: event.target.value })} className="border border-[color:var(--line)] bg-[#0b1718] px-3 py-2">{collections.map((collection) => <option key={collection}>{collection}</option>)}</select></label>
+      <RecordPicker collection={item.referenceCollection} label="Agregar referencia a esta subsubsección" onPick={(record) => {
+        if (item.references.some((reference) => reference.collection === record.collection && reference.id === record.id)) return;
+        onChange({ ...item, references: [...item.references, record] });
+      }} />
+      {!!item.references.length && <div className="grid gap-2 sm:grid-cols-2">{item.references.map((reference) => <button type="button" key={`${reference.collection}-${reference.id}`} onClick={() => onChange({ ...item, references: item.references.filter((candidate) => candidate.collection !== reference.collection || candidate.id !== reference.id) })} className="grid grid-cols-[3rem_1fr_auto] items-center gap-3 border border-[color:var(--line)] p-2 text-left hover:border-red-300"><img src={imageSource(reference.image)} alt="" className="size-12 border border-[color:var(--line)] object-cover" /><span className="truncate text-sm text-[#ead9ad]">{recordLabel(reference)}</span><span>×</span></button>)}</div>}
+    </div>
+  );
+}
+
 function RecordPicker({
   collection,
   label,
   onPick,
-  requiresQuery = false,
+  requiresQuery = true,
   showFilter = true,
 }: {
   collection: string;
@@ -111,15 +139,17 @@ function RecordPicker({
   const [results, setResults] = useState<CatalogueEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
     setPage(0);
     setQuery("");
+    setIsOpen(false);
   }, [collection]);
 
   useEffect(() => {
     let alive = true;
-    if (requiresQuery && query.trim().length < 2) {
+    if (!isOpen && query.trim().length < 2) {
       setResults([]);
       setTotal(0);
       setLoading(false);
@@ -148,7 +178,7 @@ function RecordPicker({
     return () => {
       alive = false;
     };
-  }, [collection, page, query, requiresQuery]);
+  }, [collection, page, query, requiresQuery, isOpen]);
 
   const totalPages = Math.max(1, Math.ceil(total / 3));
 
@@ -162,13 +192,21 @@ function RecordPicker({
             onChange={(event) => {
               setQuery(event.target.value);
               setPage(0);
+              if (event.target.value.trim().length >= 2) setIsOpen(true);
             }}
             placeholder="Filtrar registros..."
             className={`${label ? "mt-2 " : ""}w-full border border-[color:var(--line)] bg-transparent px-3 py-2`}
           />
         </label>
       )}
-      <div className="grid gap-2">
+      <button
+        type="button"
+        onClick={() => setIsOpen((current) => !current)}
+        className="w-fit border border-[color:var(--line)] px-3 py-1.5 text-xs text-[#d5c18b] transition hover:border-[#d5c18b]"
+      >
+        {isOpen ? "Ocultar registros" : "Mostrar registros"}
+      </button>
+      {isOpen && <div className="grid gap-2">
         {loading && (
           <p className="text-xs text-[#b7a476]">Cargando registros...</p>
         )}
@@ -209,8 +247,8 @@ function RecordPicker({
             </span>
           </button>
         ))}
-      </div>
-      {total > 0 && (
+      </div>}
+      {isOpen && total > 0 && (
         <div className="flex items-center justify-between text-xs text-[#b7a476]">
           <span>
             Página {page + 1} de {totalPages} · {total} registros
@@ -294,6 +332,85 @@ async function hydratePickedRecords(references: PickedRecord[]) {
   );
 }
 
+function readGuideSubsection(value: Record<string, unknown>): GuideSubsection {
+  const references = Array.isArray(value.references)
+    ? value.references.map(asPickedRecord)
+    : [];
+  return {
+    title: String(value.title ?? ""),
+    content: String(value.content ?? ""),
+    referenceCollection: String(
+      (value.references as Record<string, unknown>[] | undefined)?.[0]
+        ?.collection ?? "items",
+    ),
+    references,
+    subsections: Array.isArray(value.subsections)
+      ? value.subsections.map((subsection) =>
+          readGuideSubsection(subsection as Record<string, unknown>),
+        )
+      : [],
+  };
+}
+
+async function hydrateGuideSubsection(
+  subsection: GuideSubsection,
+): Promise<GuideSubsection> {
+  return {
+    ...subsection,
+    references: await hydratePickedRecords(subsection.references),
+    subsections: await Promise.all(
+      (subsection.subsections ?? []).map(hydrateGuideSubsection),
+    ),
+  };
+}
+
+type SerializedGuideSubsection = {
+  order: number;
+  title: string;
+  content: string;
+  image: null;
+  references: { collection: string; id: string }[];
+  subsections: SerializedGuideSubsection[];
+};
+
+function serializeGuideSubsection(
+  subsection: GuideSubsection,
+  order: number,
+): SerializedGuideSubsection {
+  return {
+    order,
+    title: subsection.title.trim(),
+    content: subsection.content.trim(),
+    image: null,
+    references: subsection.references.map(({ collection, id }) => ({ collection, id })),
+    subsections: (subsection.subsections ?? [])
+      .filter((child) => child.title.trim() && child.content.trim())
+      .map((child, childIndex) =>
+        serializeGuideSubsection(child, childIndex + 1),
+      ),
+  };
+}
+
+function subsectionTreeSignature(
+  subsections: Array<{ title?: unknown; content?: unknown; subsections?: unknown }>,
+  prefix = "",
+): string[] {
+  return subsections.flatMap((subsection, index) => {
+    const path = `${prefix}${index}:${String(subsection.title ?? "").trim()}|${String(subsection.content ?? "").trim()}`;
+    const children = Array.isArray(subsection.subsections)
+      ? subsectionTreeSignature(
+          subsection.subsections as Array<{
+            title?: unknown;
+            content?: unknown;
+            subsections?: unknown;
+          }>,
+          `${path}/`,
+        )
+      : [];
+    return [path, ...children];
+  });
+}
+
 function recordLabel(record: PickedRecord) {
   return record.name && record.name !== record.id
     ? record.name
@@ -340,7 +457,10 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
   useEffect(() => {
     if (!guideId) return;
     let alive = true;
-    fetch(`/api/admin/guides/${encodeURIComponent(guideId)}`)
+    fetch(
+      `/api/admin/guides/${encodeURIComponent(guideId)}?t=${Date.now()}`,
+      { cache: "no-store" },
+    )
       .then((response) =>
         response.json().then((result) => ({ response, result })),
       )
@@ -438,21 +558,10 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                   ? supplement.references.map(asPickedRecord)
                   : [],
                 subsections: Array.isArray(supplement.subsections)
-                  ? supplement.subsections.map(
-                      (subsection: Record<string, unknown>) => ({
-                        title: String(subsection.title ?? ""),
-                        content: String(subsection.content ?? ""),
-                        referenceCollection: String(
-                          (
-                            subsection.references as
-                              | Record<string, unknown>[]
-                              | undefined
-                          )?.[0]?.collection ?? "items",
-                        ),
-                        references: Array.isArray(subsection.references)
-                          ? subsection.references.map(asPickedRecord)
-                          : [],
-                      }),
+                  ? supplement.subsections.map((subsection) =>
+                      readGuideSubsection(
+                        subsection as Record<string, unknown>,
+                      ),
                     )
                   : [],
               }))
@@ -463,10 +572,7 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
             ...supplement,
             references: await hydratePickedRecords(supplement.references),
             subsections: await Promise.all(
-              supplement.subsections.map(async (subsection) => ({
-                ...subsection,
-                references: await hydratePickedRecords(subsection.references),
-              })),
+              supplement.subsections.map(hydrateGuideSubsection),
             ),
           })),
         ).then((hydratedSupplements) => alive && setSupplements(hydratedSupplements));
@@ -477,6 +583,7 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
       alive = false;
     };
   }, [guideId]);
+
   async function submit() {
     setSaving(true);
     setMessage("");
@@ -545,16 +652,9 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                 (subsection) =>
                   subsection.title.trim() && subsection.content.trim(),
               )
-              .map((subsection, subsectionIndex) => ({
-                order: subsectionIndex + 1,
-                title: subsection.title.trim(),
-                content: subsection.content.trim(),
-                image: null,
-                references: subsection.references.map(({ collection, id }) => ({
-                  collection,
-                  id,
-                })),
-              })),
+              .map((subsection, subsectionIndex) =>
+                serializeGuideSubsection(subsection, subsectionIndex + 1),
+              ),
           })),
       };
       const response = await fetch(
@@ -570,6 +670,26 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
       const result = await response.json().catch(() => ({}));
       if (!response.ok || !result.success)
         throw new Error(result.error ?? "No se pudo guardar la guía.");
+
+      const returnedGuide = result.data ?? result;
+      if (Array.isArray(returnedGuide?.supplements)) {
+        const expected = payload.supplements.flatMap((supplement) =>
+          subsectionTreeSignature(supplement.subsections),
+        );
+        const persisted = returnedGuide.supplements.flatMap(
+          (supplement: { subsections?: unknown }) =>
+            subsectionTreeSignature(
+              Array.isArray(supplement.subsections)
+                ? supplement.subsections
+                : [],
+            ),
+        );
+        if (expected.join("\n") !== persisted.join("\n")) {
+          throw new Error(
+            "El backend respondió correctamente, pero no conservó todas las subsecciones del complemento. La guía no se cerró para evitar ocultar el problema.",
+          );
+        }
+      }
       const savedId = result.id ?? result.data?.id ?? editingGuideId;
       if (savedId) setEditingGuideId(String(savedId));
       setMessage(editingGuideId ? "Guía actualizada." : "Guía creada.");
@@ -710,10 +830,11 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
               </button>
             </div>
             {sections.map((item, index) => (
-              <div
-                key={index}
-                className="grid gap-3 border border-[color:var(--line)] p-4"
-              >
+              <details key={index} className="border border-[color:var(--line)]">
+                <summary className="cursor-pointer px-4 py-3 text-xs text-[#b7a476] marker:text-[#d5c18b]">
+                  SECCIÓN {index + 1}{item.title.trim() ? ` · ${item.title}` : ""}
+                </summary>
+                <div className="grid gap-3 border-t border-[color:var(--line)] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#b7a476]">
                     SECCIÓN {index + 1}
@@ -790,10 +911,11 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                     </button>
                   </div>
                   {item.subsections.map((subsection, subsectionIndex) => (
-                    <div
-                      key={subsectionIndex}
-                      className="grid gap-2 border border-[color:var(--line)] p-3"
-                    >
+                    <details key={subsectionIndex} className="border border-[color:var(--line)]">
+                      <summary className="cursor-pointer px-3 py-2 text-xs text-[#b7a476] marker:text-[#d5c18b]">
+                        SUBSECCIÓN {subsectionIndex + 1}{subsection.title.trim() ? ` · ${subsection.title}` : ""}
+                      </summary>
+                      <div className="grid gap-2 border-t border-[color:var(--line)] p-3">
                       <div className="flex justify-between text-xs text-[#b7a476]">
                         <span>SUBSECCIÓN {subsectionIndex + 1}</span>
                         <button
@@ -994,7 +1116,8 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                           ))}
                         </div>
                       )}
-                    </div>
+                      </div>
+                    </details>
                   ))}
                 </div>
                 <label className="flex items-center gap-2 border-t border-[color:var(--line)] pt-3 text-sm text-[#e5cf99]">
@@ -1113,7 +1236,8 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              </details>
             ))}
           </div>
           <div className="grid gap-3 border-t border-[color:var(--line)] pt-4 md:col-span-2">
@@ -1147,10 +1271,11 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
               </button>
             </div>
             {supplements.map((item, index) => (
-              <div
-                key={item.id}
-                className="grid gap-3 border border-[color:var(--line)] p-4"
-              >
+              <details key={item.id} className="border border-[color:var(--line)]">
+                <summary className="cursor-pointer px-4 py-3 text-xs text-[#b7a476] marker:text-[#d5c18b]">
+                  COMPLEMENTO {index + 1}{item.title.trim() ? ` · ${item.title}` : ""}
+                </summary>
+                <div className="grid gap-3 border-t border-[color:var(--line)] p-4">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-[#b7a476]">
                     COMPLEMENTO {index + 1}
@@ -1276,10 +1401,11 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                   </div>
                   <div className="mt-3 grid gap-3">
                     {item.subsections.map((subsection, subsectionIndex) => (
-                      <div
-                        key={`${item.id}-subsection-${subsectionIndex}`}
-                        className="grid gap-3 border border-[color:var(--line)] bg-black/10 p-3"
-                      >
+                      <details key={`${item.id}-subsection-${subsectionIndex}`} className="border border-[color:var(--line)] bg-black/10">
+                        <summary className="cursor-pointer px-3 py-2 text-xs text-[#b7a476] marker:text-[#d5c18b]">
+                          SUBSECCIÓN {subsectionIndex + 1}{subsection.title.trim() ? ` · ${subsection.title}` : ""}
+                        </summary>
+                        <div className="grid gap-3 border-t border-[color:var(--line)] p-3">
                         <div className="flex justify-between text-xs text-[#b7a476]">
                           <span>SUBSECCIÓN {subsectionIndex + 1}</span>
                           <button
@@ -1384,7 +1510,27 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                           }
                         />
                         {!!subsection.references.length && <div className="grid gap-2 sm:grid-cols-2">{subsection.references.map((reference) => <button type="button" key={`${reference.collection}-${reference.id}`} onClick={() => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, references: candidate.references.filter((picked) => picked.collection !== reference.collection || picked.id !== reference.id) } : candidate) } : supplement))} className="grid grid-cols-[3rem_1fr_auto] items-center gap-3 border border-[color:var(--line)] p-2 text-left hover:border-red-300"><img src={imageSource(reference.image)} alt="" className="size-12 border border-[color:var(--line)] object-cover" /><span className="truncate text-sm text-[#ead9ad]">{recordLabel(reference)}</span><span>×</span></button>)}</div>}
-                      </div>
+                        <div className="border-t border-[color:var(--line)] pt-3">
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-[#b7a476]">Subsubsecciones</p>
+                            <button type="button" onClick={() => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: [...(candidate.subsections ?? []), { title: "", content: "", referenceCollection: "items", references: [], subsections: [] }] } : candidate) } : supplement))} className="border border-[color:var(--line)] px-2 py-1 text-xs">Añadir subsubsección</button>
+                          </div>
+                          <div className="mt-3 grid gap-3">
+                            {(subsection.subsections ?? []).map((child, childIndex) => (
+                              <SubsubsectionEditor
+                                key={`editor-${item.id}-${subsectionIndex}-${childIndex}`}
+                                item={child}
+                                onChange={(next) => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: (candidate.subsections ?? []).map((grandchild, grandchildIndex) => grandchildIndex === childIndex ? next : grandchild) } : candidate) } : supplement))}
+                                onRemove={() => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: (candidate.subsections ?? []).filter((_, grandchildIndex) => grandchildIndex !== childIndex) } : candidate) } : supplement))}
+                              />
+                            ))}
+                          </div>
+                          <div className="hidden">
+                            {(subsection.subsections ?? []).map((child, childIndex) => <div key={`${item.id}-${subsectionIndex}-${childIndex}`} className="grid gap-2 border-l-2 border-[#7f6b35] bg-black/10 p-3"><div className="flex justify-between text-xs text-[#b7a476]"><span>SUBSUBSECCIÓN {childIndex + 1}</span><button type="button" onClick={() => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: (candidate.subsections ?? []).filter((_, index) => index !== childIndex) } : candidate) } : supplement))} className="text-red-300">Quitar</button></div><input value={child.title} onChange={(event) => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: (candidate.subsections ?? []).map((grandchild, index) => index === childIndex ? { ...grandchild, title: event.target.value } : grandchild) } : candidate) } : supplement))} placeholder="Título de la subsubsección" className="border border-[color:var(--line)] bg-transparent px-3 py-2" /><textarea value={child.content} onChange={(event) => setSupplements((current) => current.map((supplement) => supplement.id === item.id ? { ...supplement, subsections: supplement.subsections.map((candidate, candidateIndex) => candidateIndex === subsectionIndex ? { ...candidate, subsections: (candidate.subsections ?? []).map((grandchild, index) => index === childIndex ? { ...grandchild, content: event.target.value } : grandchild) } : candidate) } : supplement))} placeholder="Contenido de la subsubsección" rows={3} className="border border-[color:var(--line)] bg-transparent px-3 py-2" /></div>)}
+                          </div>
+                        </div>
+                        </div>
+                      </details>
                     ))}
                   </div>
                 </div>
@@ -1490,7 +1636,8 @@ export default function GuideEditor({ guideId }: { guideId?: string }) {
                     ))}
                   </div>
                 )}
-              </div>
+                </div>
+              </details>
             ))}
           </div>
           <button

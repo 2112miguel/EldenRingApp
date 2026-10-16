@@ -7,6 +7,14 @@ export type RecordReference = {
   kind?: "record" | "currency";
 };
 export type GuideSummary = { id: string; title: string; status: "published" };
+export type GuideSupplementSubsection = {
+  order: number;
+  title: string;
+  content: string;
+  image?: string | null;
+  references?: RecordReference[];
+  subsections?: GuideSupplementSubsection[];
+};
 export type Guide = {
   id: string;
   title: string;
@@ -38,13 +46,7 @@ export type Guide = {
     content: string;
     image?: string | null;
     references?: RecordReference[];
-    subsections?: {
-      order: number;
-      title: string;
-      content: string;
-      image?: string | null;
-      references?: RecordReference[];
-    }[];
+    subsections?: GuideSupplementSubsection[];
   }[];
   media?: { type: string; url: string; alt?: string }[];
 };
@@ -81,6 +83,32 @@ export type CatalogueEntry = {
   defence?: Attribute[];
   dmgNegation?: Attribute[];
   resistance?: Attribute[];
+  isBaseGameStartingClass?: boolean;
+  contentSource?: string | null;
+  gameVersion?: string | null;
+  stats?:
+    | string
+    | {
+        level?: number;
+        vigor?: number;
+        mind?: number;
+        endurance?: number;
+        strength?: number;
+        dexterity?: number;
+        intelligence?: number;
+        faith?: number;
+        arcane?: number;
+      };
+  startingEquipment?: Record<
+    string,
+    (RecordReference & { quantity?: number })[]
+  >;
+  startingEquipmentSetName?: string | null;
+  startingInventoryVerification?: {
+    status?: string;
+    verifiedCategories?: string[];
+    unverifiedCategories?: string[];
+  };
 };
 
 export type CatalogueResponse = {

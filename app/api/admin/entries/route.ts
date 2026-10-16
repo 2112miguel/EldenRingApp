@@ -20,6 +20,7 @@ const endpoints: Record<string, string> = {
 
 const isSimpleValue = (value: unknown) =>
   value === null || ["string", "number", "boolean"].includes(typeof value);
+const isUnsafeFieldName = (key: string) => key.includes(".") || key.startsWith("$");
 
 export async function PATCH(request: NextRequest) {
   const token = request.cookies.get("elden_admin_token")?.value;
@@ -40,7 +41,7 @@ export async function PATCH(request: NextRequest) {
     Array.isArray(changes) ||
     Object.keys(changes).length === 0 ||
     Object.entries(changes).some(
-      ([key, value]) => key === "id" || key === "_id" || !isSimpleValue(value),
+      ([key, value]) => key === "id" || key === "_id" || isUnsafeFieldName(key) || !isSimpleValue(value),
     );
 
   if (!endpoint || typeof id !== "string" || !id || invalidChanges) {
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
     Array.isArray(values) ||
     !Object.keys(values).length ||
     Object.entries(values).some(
-      ([key, value]) => key === "id" || key === "_id" || !isSimpleValue(value),
+      ([key, value]) => key === "id" || key === "_id" || isUnsafeFieldName(key) || !isSimpleValue(value),
     );
   if (!endpoint || invalidValues)
     return NextResponse.json(

@@ -17,6 +17,25 @@ import { imageSource } from "../lib/elden-ring";
 type EditableValue = string | number | boolean | null;
 const pageSize = 20;
 const protectedFields = new Set(["id", "_id", "name", "image", "description"]);
+const invalidFieldName = (field: string) =>
+  !field.trim() || field.includes(".") || field.startsWith("$");
+const creationFieldsBySection: Record<string, Record<string, EditableValue>> = {
+  Jefes: { region: "", healthPoints: "" },
+  Objetos: {
+    type: "",
+    effect: "",
+    obtainedFrom: null,
+    fextralifePageUrl: null,
+  },
+  Talismanes: { type: "", effect: "", weight: null },
+  Armas: { category: "", weight: null, skill: "" },
+  Escudos: { category: "", weight: null, skill: "" },
+  Munición: { type: "", effect: "" },
+  Invocaciones: { effect: "", fpCost: null, hpCost: null },
+  Hechicerías: { type: "", fpCost: null, slots: null, effect: "" },
+  Encantamientos: { type: "", fpCost: null, slots: null, effect: "" },
+  Clases: { isBaseGameStartingClass: true, contentSource: null, gameVersion: null },
+};
 const fieldLabel = (field: string) =>
   field
     .replace(/([A-Z])/g, " $1")
@@ -106,11 +125,27 @@ export default function AdminDashboard() {
     setSaving(true);
     setMessage("");
     try {
+      if (!name.trim()) {
+        setMessage("El nombre es obligatorio.");
+        return;
+      }
+      const invalidField = Object.keys(extraFields).find(invalidFieldName);
+      if (invalidField) {
+        setMessage(
+          `El campo “${invalidField}” no es válido: no puede contener “.” ni comenzar con “$”.`,
+        );
+        return;
+      }
       const changes = {
-        name,
+        name: name.trim(),
         image: image || null,
         description: description || null,
-        ...extraFields,
+        ...Object.fromEntries(
+          Object.entries(extraFields).map(([key, value]) => [
+            key,
+            value === "" ? null : value,
+          ]),
+        ),
       };
       const response = await fetch("/api/admin/entries", {
         method: creating ? "POST" : "PATCH",
@@ -193,7 +228,7 @@ export default function AdminDashboard() {
     setName("");
     setImage("");
     setDescription("");
-    setExtraFields(section === "Jefes" ? { region: "", healthPoints: "" } : {});
+    setExtraFields({ ...(creationFieldsBySection[section] ?? {}) });
     setMessage("");
   }
 
@@ -386,8 +421,9 @@ export default function AdminDashboard() {
                 />
               </label>
               {Object.entries(extraFields).map(([field, value]) => (
-                <label key={field} className="mt-4 grid gap-2 text-sm">
-                  {fieldLabel(field)}
+                <label key={field} className={`mt-4 grid gap-2 text-sm ${invalidFieldName(field) ? "text-red-300" : ""}`}>
+                  <span className="flex items-center justify-between gap-3">{fieldLabel(field)}<button type="button" onClick={() => setExtraFields((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== field)))} className="text-xs text-red-300 hover:text-red-200">Quitar campo</button></span>
+                  {invalidFieldName(field) && <span className="text-xs">El nombre no puede contener “.” ni comenzar con “$”.</span>}
                   {typeof value === "boolean" ? (
                     <input
                       type="checkbox"
@@ -398,7 +434,7 @@ export default function AdminDashboard() {
                           [field]: event.target.checked,
                         }))
                       }
-                      className="size-4 accent-[#d9bc7e]"
+                      className={`size-4 accent-[#d9bc7e] ${invalidFieldName(field) ? "outline outline-1 outline-red-400" : ""}`}
                     />
                   ) : (
                     <input
@@ -413,33 +449,47 @@ export default function AdminDashboard() {
                               : event.target.value,
                         }))
                       }
-                      className="border border-[color:var(--line)] bg-transparent px-3 py-2 outline-none focus:border-[#d9bc7e]"
+                      className={`border bg-transparent px-3 py-2 outline-none focus:border-[#d9bc7e] ${invalidFieldName(field) ? "border-red-400" : "border-[color:var(--line)]"}`}
                     />
                   )}
                 </label>
               ))}
               {creating && (
                 <div className="mt-4 flex gap-2">
-                  <input
-                    value={newField}
-                    onChange={(event) => setNewField(event.target.value)}
-                    placeholder="Campo adicional, ej. region"
-                    className="min-w-0 flex-1 border border-[color:var(--line)] bg-transparent px-3 py-2 text-sm outline-none focus:border-[#d9bc7e]"
-                  />
+                  <div className="min-w-0 flex-1">
+                    <input
+                      value={newField}
+                      onChange={(event) => {
+                        setNewField(event.target.value);
+                        setMessage("");
+                      }}
+                      placeholder="Nombre técnico, ej. purchasedFrom"
+                      className={`w-full border bg-transparent px-3 py-2 text-sm outline-none focus:border-[#d9bc7e] ${newField.trim() && invalidFieldName(newField) ? "border-red-400" : "border-[color:var(--line)]"}`}
+                    />
+                    <p className="mt-1 text-xs text-[#a99d85]">Aquí va el nombre del campo, no su contenido.</p>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
                       const field = newField.trim();
-                      if (!field || protectedFields.has(field)) return;
+                      if (
+                        invalidFieldName(field) ||
+                        protectedFields.has(field)
+                      ) {
+                        setMessage(
+                          "Usa un nombre técnico sin puntos ni $; después escribe el valor en el campo creado.",
+                        );
+                        return;
+                      }
                       setExtraFields((current) => ({
                         ...current,
                         [field]: "",
                       }));
                       setNewField("");
                     }}
-                    className="border border-[color:var(--line)] px-3 text-sm text-[#d5c18b]"
+                    className="h-10 border border-[color:var(--line)] px-3 text-sm text-[#d5c18b]"
                   >
-                    Añadir
+                    Añadir campo
                   </button>
                 </div>
               )}

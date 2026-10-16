@@ -1,15 +1,49 @@
 "use client";
 
-import { ArrowLeft, BookOpen, Check, ExternalLink, Lightbulb, ShieldAlert } from "lucide-react";
+import { ArrowLeft, BookOpen, Check, ExternalLink, Lightbulb, ShieldAlert, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { imageSource, type Guide, type RecordReference } from "../../lib/elden-ring";
+import { imageSource, type CatalogueEntry, type Guide, type GuideSupplementSubsection, type RecordReference } from "../../lib/elden-ring";
 
 const typeIcon = { warning: ShieldAlert, tip: Lightbulb, mechanic: BookOpen, lore: BookOpen, "npc-note": BookOpen, checklist: Check, "external-link": ExternalLink };
 const typeLabel = { tip: "Consejo", warning: "Advertencia", mechanic: "Mecánica", lore: "Historia", "npc-note": "Nota de NPC", checklist: "Lista de verificación", "external-link": "Enlace externo" };
 
 function GuideReferences({ references }: { references?: RecordReference[] }) {
+  const [selected, setSelected] = useState<RecordReference | null>(null);
+  const [entry, setEntry] = useState<CatalogueEntry | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  async function openReference(reference: RecordReference) {
+    if (selected?.collection === reference.collection && selected.id === reference.id) {
+      setSelected(null);
+      return;
+    }
+    setSelected(reference);
+    setEntry(null);
+    setLoading(true);
+    try {
+      const response = await fetch(
+        `/api/catalogue/${encodeURIComponent(reference.collection)}/${encodeURIComponent(reference.id ?? "")}`,
+      );
+      const result = await response.json();
+      if (response.ok && result.data) setEntry(result.data as CatalogueEntry);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   if (!references?.length) return null;
-  return <div className="mt-5 grid gap-3 sm:grid-cols-2">{references.map((reference) => <a key={`${reference.collection}-${reference.id}`} href={`/?referenceCollection=${encodeURIComponent(reference.collection)}&referenceId=${encodeURIComponent(reference.id ?? "")}`} className="flex items-center gap-3 border border-[color:var(--line)] bg-black/10 p-3 no-underline transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20"><img src={imageSource(reference.image)} alt="" className="size-14 border border-[color:var(--line)] object-cover" /><div><p className="text-xs tracking-[.13em] text-[#b7a476]">{reference.collection} · Ver en compendio</p><p className="mt-1 text-sm text-[#ead9ad]">{reference.name ?? "Registro relacionado"}</p></div></a>)}</div>;
+  return <div className="mt-5 grid gap-3 sm:grid-cols-2">{references.map((reference) => <button type="button" key={`${reference.collection}-${reference.id}`} onClick={() => void openReference(reference)} aria-expanded={selected?.collection === reference.collection && selected.id === reference.id} className="flex items-center gap-3 border border-[color:var(--line)] bg-black/10 p-3 text-left transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20"><img src={imageSource(reference.image)} alt="" className="size-14 border border-[color:var(--line)] object-cover" /><div><p className="text-xs tracking-[.13em] text-[#b7a476]">{reference.collection} · Ver ficha</p><p className="mt-1 text-sm text-[#ead9ad]">{reference.name ?? "Registro relacionado"}</p></div></button>)}{selected && <div className="border border-[#b79648] bg-[#0c1819] p-4 sm:col-span-2"><div className="flex items-start justify-between gap-4"><div className="flex min-w-0 gap-4"><img src={imageSource(entry?.image ?? selected.image)} alt="" className="size-24 shrink-0 border border-[color:var(--line)] object-cover" /><div><p className="text-xs tracking-[.13em] text-[#b7a476]">{selected.collection}</p><h4 className="mt-1 text-lg text-[#ead9ad]">{entry?.name ?? selected.name ?? "Registro relacionado"}</h4>{loading ? <p className="mt-2 text-sm text-[#b7a476]">Cargando ficha…</p> : <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#c8baa0]">{entry?.description || "Sin descripción disponible."}</p>}</div></div><button type="button" onClick={() => setSelected(null)} className="text-[#d8bf77] hover:text-[#f0cf7b]" aria-label="Cerrar ficha"><X className="size-5" /></button></div></div>}</div>;
+}
+
+function SupplementSubsections({
+  subsections,
+  depth = 0,
+}: {
+  subsections?: GuideSupplementSubsection[];
+  depth?: number;
+}) {
+  if (!subsections?.length) return null;
+  return <>{subsections.sort((a, b) => a.order - b.order).map((subsection) => <div key={subsection.order} className={depth === 0 ? "mt-5 border-l-2 border-[#7f6b35] pl-4" : "mt-4 border-l border-[#6b5a31] pl-4"}><h4 className="text-base text-[#e7d4a3]">{subsection.title}</h4><p className="mt-2 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{subsection.content}</p>{subsection.image && <img src={subsection.image} alt="" className="mt-4 max-h-80 w-full bg-black/20 object-contain" />}<GuideReferences references={subsection.references} /><SupplementSubsections subsections={subsection.subsections} depth={depth + 1} /></div>)}</>;
 }
 
 export default function GuideDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +55,10 @@ export default function GuideDetailPage({ params }: { params: Promise<{ id: stri
     let alive = true;
     void (async () => {
       const { id } = await params;
-      const response = await fetch(`/api/guides/detail/${encodeURIComponent(id)}`);
+      const response = await fetch(
+        `/api/guides/detail/${encodeURIComponent(id)}?t=${Date.now()}`,
+        { cache: "no-store" },
+      );
       const result = await response.json();
       if (!alive) return;
       if (!response.ok || !result.success) throw new Error(result.error ?? "No fue posible cargar la guía.");
@@ -42,7 +79,7 @@ export default function GuideDetailPage({ params }: { params: Promise<{ id: stri
     </header>
     <article className="mx-auto max-w-4xl px-5 py-10 md:px-8">
       <div className="grid gap-10">{guide.sections?.sort((a, b) => a.order - b.order).map((section) => <section key={section.order} className="border-l-2 border-[#b79648] pl-5"><h2 className="text-2xl text-[#ecd9aa]">{section.title}</h2>{section.content && <p className="mt-3 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{section.content}</p>}<GuideReferences references={section.references} />{section.subsections?.sort((a, b) => a.order - b.order).map((subsection) => <div key={subsection.order} className="mt-6 border border-[color:var(--line)] bg-[#0b1718] p-5"><h3 className="text-lg text-[#e7d4a3]">{subsection.title}</h3><p className="mt-2 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{subsection.content}</p><GuideReferences references={subsection.references} /></div>)}</section>)}</div>
-      {!!guide.supplements?.length && <section className="mt-12 grid gap-4"><h2 className="text-2xl text-[#ecd9aa]">Complementos</h2>{guide.supplements.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((supplement) => { const Icon = typeIcon[supplement.type]; return <div key={supplement.id} className="border border-[color:var(--line)] bg-[#0b1718] p-5"><p className="flex items-center gap-2 text-xs tracking-[.15em] text-[#d8bf77]"><Icon className="size-4" />{typeLabel[supplement.type]}</p><h3 className="mt-3 text-lg text-[#ead9ad]">{supplement.title}</h3><p className="mt-2 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{supplement.content}</p>{supplement.image && <img src={supplement.image} alt="" className="mt-4 max-h-96 w-full bg-black/20 object-contain" />}<GuideReferences references={supplement.references} />{supplement.subsections?.sort((a, b) => a.order - b.order).map((subsection) => <div key={subsection.order} className="mt-5 border-l-2 border-[#7f6b35] pl-4"><h4 className="text-base text-[#e7d4a3]">{subsection.title}</h4><p className="mt-2 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{subsection.content}</p>{subsection.image && <img src={subsection.image} alt="" className="mt-4 max-h-80 w-full bg-black/20 object-contain" />}<GuideReferences references={subsection.references} /></div>)}</div>; })}</section>}
+      {!!guide.supplements?.length && <section className="mt-12 grid gap-4"><h2 className="text-2xl text-[#ecd9aa]">Complementos</h2>{guide.supplements.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((supplement) => { const Icon = typeIcon[supplement.type]; return <div key={supplement.id} className="border border-[color:var(--line)] bg-[#0b1718] p-5"><p className="flex items-center gap-2 text-xs tracking-[.15em] text-[#d8bf77]"><Icon className="size-4" />{typeLabel[supplement.type]}</p><h3 className="mt-3 text-lg text-[#ead9ad]">{supplement.title}</h3><p className="mt-2 whitespace-pre-line leading-relaxed text-[#cfc2a7]">{supplement.content}</p>{supplement.image && <img src={supplement.image} alt="" className="mt-4 max-h-96 w-full bg-black/20 object-contain" />}<GuideReferences references={supplement.references} /><SupplementSubsections subsections={supplement.subsections} /></div>; })}</section>}
     </article>
   </main>;
 }

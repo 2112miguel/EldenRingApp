@@ -46,6 +46,7 @@ import {
   type CatalogueEntry,
   type CatalogueResponse,
   type Guide,
+  type GuideSupplementSubsection,
   type RecordReference,
 } from "../lib/elden-ring";
 
@@ -779,6 +780,12 @@ function Details({
                 onOpenReference={onOpenReference}
               />
             )}
+            {section === "Clases" && (
+              <ClassInformation
+                entry={entry}
+                onOpenReference={onOpenReference}
+              />
+            )}
           </div>
         </TabsContent>
         {section !== "Jefes" && entry.location && (
@@ -827,6 +834,84 @@ function Details({
   );
 }
 
+const classStatLabels: Record<string, string> = {
+  level: "Nivel",
+  vigor: "Vigor",
+  mind: "Mente",
+  endurance: "Resistencia",
+  strength: "Fuerza",
+  dexterity: "Destreza",
+  intelligence: "Inteligencia",
+  faith: "Fe",
+  arcane: "Arcano",
+};
+const equipmentCategoryLabels: Record<string, string> = {
+  weapons: "Armas",
+  shields: "Escudos",
+  armors: "Armaduras",
+  ammos: "Munición",
+  ammunition: "Munición",
+  sorceries: "Hechicerías",
+  spells: "Hechizos",
+  incantations: "Encantamientos",
+  spirits: "Invocaciones",
+  skills: "Habilidades",
+  ashes: "Habilidades",
+  staffs: "Báculos",
+  sacredSeals: "Sellos sagrados",
+  consumables: "Consumibles",
+};
+
+function ClassInformation({
+  entry,
+  onOpenReference,
+}: {
+  entry: CatalogueEntry;
+  onOpenReference: (reference: RecordReference) => void;
+}) {
+  const stats =
+    entry.stats && typeof entry.stats === "object" ? entry.stats : null;
+  const equipment = entry.startingEquipment
+    ? Object.entries(entry.startingEquipment).filter(([, records]) =>
+        Array.isArray(records) && records.length,
+      )
+    : [];
+  return (
+    <section className="mt-7 grid gap-5">
+      {entry.isBaseGameStartingClass === false && (
+        <p className="w-fit border border-[#917a3d] bg-[#211d11]/70 px-3 py-2 text-sm text-[#dfca8b]">
+          {entry.contentSource || "Tarnished Pack"}
+          {entry.gameVersion ? ` · v${entry.gameVersion}` : ""}
+        </p>
+      )}
+      {stats && (
+        <div className="border border-[color:var(--line)] p-4">
+          <h3 className="text-lg text-[#e5cf99]">Estadísticas iniciales</h3>
+          <div className="mt-3 grid grid-cols-2 gap-px bg-[color:var(--line)] sm:grid-cols-3">
+            {Object.entries(classStatLabels).map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between bg-[#0b1718] px-3 py-2 text-sm">
+                <span className="text-[#b7a476]">{label}</span>
+                <strong className="text-[#ead9ad]">{stats[key as keyof typeof stats] ?? "—"}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {typeof entry.stats === "string" && entry.stats && (
+        <p className="whitespace-pre-line text-[#cfc2a7]">{entry.stats}</p>
+      )}
+      {!!equipment.length && (
+        <div className="border border-[color:var(--line)] p-4">
+          <h3 className="text-lg text-[#e5cf99]">Equipo inicial</h3>
+          {entry.startingEquipmentSetName && <p className="mt-1 text-sm text-[#b7a476]">{entry.startingEquipmentSetName}</p>}
+          <div className="mt-4 grid gap-4">{equipment.map(([category, records]) => <div key={category}><h4 className="text-sm text-[#d5c18b]">{equipmentCategoryLabels[category] || category}</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{records.map((record, index) => <button type="button" key={`${record.collection}-${record.id}-${index}`} onClick={() => record.id && onOpenReference(record)} className="flex items-center gap-3 border border-[color:var(--line)] bg-black/10 p-2 text-left transition hover:border-[#d5c18b]"><img src={imageSource(record.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt="" className="size-12 border border-[color:var(--line)] object-cover" /><span className="min-w-0"><span className="block truncate text-sm text-[#ead9ad]">{record.name || "Registro relacionado"}{record.quantity && record.quantity > 1 ? ` ×${record.quantity}` : ""}</span><span className="text-xs text-[#b7a476]">Ver detalle</span></span></button>)}</div></div>)}</div>
+        </div>
+      )}
+      {entry.startingInventoryVerification?.status === "partial" && <p className="text-sm text-[#b7a476]">Inventario en verificación</p>}
+    </section>
+  );
+}
+
 function GuideStrategy({
   entry,
   section,
@@ -846,7 +931,9 @@ function GuideStrategy({
     let alive = true;
     setLoading(true);
     setError("");
-    fetch(`/api/guides/${collection}/${entry.id}`)
+    fetch(`/api/guides/${collection}/${entry.id}?t=${Date.now()}`, {
+      cache: "no-store",
+    })
       .then((response) =>
         response.json().then((result) => ({ response, result })),
       )
@@ -946,6 +1033,9 @@ function GuideStrategy({
                     alt={supplement.title}
                   />
                 )}
+                <StrategySupplementSubsections
+                  subsections={supplement.subsections}
+                />
               </article>
             ))}
           </div>
@@ -960,6 +1050,44 @@ function GuideStrategy({
             src={media.url}
             alt={media.alt ?? "Imagen de la guía"}
           />
+        ))}
+    </div>
+  );
+}
+
+function StrategySupplementSubsections({
+  subsections,
+  depth = 0,
+}: {
+  subsections?: GuideSupplementSubsection[];
+  depth?: number;
+}) {
+  if (!subsections?.length) return null;
+  return (
+    <div className={depth === 0 ? "mt-4 grid gap-3" : "mt-3 grid gap-3"}>
+      {subsections
+        .sort((a, b) => a.order - b.order)
+        .map((subsection) => (
+          <section
+            key={subsection.order}
+            className="border-l border-[#7f6b35] pl-4"
+          >
+            <h5 className="text-base text-[#d8c998]">{subsection.title}</h5>
+            <p className="mt-1 whitespace-pre-line leading-relaxed text-[#cfc3ad]">
+              {subsection.content}
+            </p>
+            {subsection.image && (
+              <img
+                className="mt-3 max-h-72 w-full border border-[color:var(--line)] object-contain"
+                src={subsection.image}
+                alt={subsection.title}
+              />
+            )}
+            <StrategySupplementSubsections
+              subsections={subsection.subsections}
+              depth={depth + 1}
+            />
+          </section>
         ))}
     </div>
   );
