@@ -26,7 +26,14 @@ export async function GET(request: NextRequest) {
       success: false,
       error: "Respuesta inválida del backend.",
     }));
-    return NextResponse.json(result, { status: upstream.status });
+    const response = NextResponse.json(result, { status: upstream.status });
+    if (upstream.status === 401)
+      response.cookies.set("elden_admin_token", "", {
+        httpOnly: true,
+        path: "/",
+        maxAge: 0,
+      });
+    return response;
   } catch {
     return NextResponse.json(
       { success: false, error: "No fue posible cargar las guías." },

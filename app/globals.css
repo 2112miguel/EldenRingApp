@@ -179,6 +179,18 @@ body {
 .nav-item.active i {
   color: #f1d498;
 }
+
+button:not(:disabled),
+a[href],
+summary,
+select,
+[role="button"] {
+  cursor: pointer !important;
+}
+
+button:disabled {
+  cursor: not-allowed !important;
+}
 .rail-erdtree {
   position: absolute;
   bottom: 0;

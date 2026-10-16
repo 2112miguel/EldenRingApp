@@ -452,8 +452,8 @@ export default function Compendium({
                 onClick={() => setActiveSection("Inicio")}
                 className={
                   activeSection === "Inicio"
-                    ? "border-b border-[color:var(--gold)] px-2.5 py-2 text-sm text-[#eed498]"
-                    : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"
+                    ? "border-b border-[color:var(--gold)] bg-[#5e4722]/20 px-2.5 py-2 text-sm text-[#eed498] transition"
+                    : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
                 }
               >
                 Inicio
@@ -462,15 +462,15 @@ export default function Compendium({
                 onClick={() => selectSection("Jefes")}
                 className={
                   activeSection !== "Inicio"
-                    ? "border-b border-[color:var(--gold)] px-2.5 py-2 text-sm text-[#eed498]"
-                    : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"
+                    ? "border-b border-[color:var(--gold)] bg-[#5e4722]/20 px-2.5 py-2 text-sm text-[#eed498] transition"
+                    : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
                 }
               >
                 Compendio
               </button>
               <a
                 href="/guides"
-                className="inline-flex items-center gap-1 border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] hover:text-[#eed498]"
+                className="inline-flex items-center gap-1 border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
               >
                 <BookOpen className="size-3.5" />
                 Guías
