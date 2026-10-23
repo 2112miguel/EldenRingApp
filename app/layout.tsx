@@ -3,8 +3,8 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { ScrollToTop } from "./components/scroll-to-top";
-import { cookies, headers } from "next/headers";
-import { localeCookieName, resolveLocale } from "./lib/locale";
+import { headers } from "next/headers";
+import { resolveLocale } from "./lib/locale";
 import { LocaleProvider } from "./components/locale-provider";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
@@ -17,10 +17,7 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const cookieStore = await cookies();
   const requestHeaders = await headers();
-  const locale = resolveLocale(
-    cookieStore.get(localeCookieName)?.value ?? requestHeaders.get("accept-language"),
-  );
+  const locale = resolveLocale(requestHeaders.get("accept-language"));
   return <html lang={locale} className={cn("font-sans", geist.variable)}><body><LocaleProvider initialLocale={locale}>{children}<ScrollToTop /></LocaleProvider></body></html>;
 }

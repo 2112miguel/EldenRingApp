@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, type ReactNode } from "react";
 import type { SupportedLocale } from "../lib/locale";
 
 type MessageKey = string;
@@ -115,24 +115,13 @@ const messages = {
 type LocaleContextValue = {
   locale: SupportedLocale;
   t: (key: MessageKey) => string;
-  setLocale: (locale: SupportedLocale) => void;
 };
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
 export function LocaleProvider({ initialLocale, children }: { initialLocale: SupportedLocale; children: ReactNode }) {
-  const [locale, updateLocale] = useState<SupportedLocale>(initialLocale);
-  const setLocale = (nextLocale: SupportedLocale) => {
-    updateLocale(nextLocale);
-    document.documentElement.lang = nextLocale;
-    void fetch("/api/locale", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ locale: nextLocale }),
-    });
-  };
-  const language = locale.startsWith("en") ? "en" : "es";
-  return <LocaleContext.Provider value={{ locale, t: (key) => messages[language][key as keyof typeof messages.es] ?? key, setLocale }}>{children}</LocaleContext.Provider>;
+  const language = initialLocale.startsWith("en") ? "en" : "es";
+  return <LocaleContext.Provider value={{ locale: initialLocale, t: (key) => messages[language][key as keyof typeof messages.es] ?? key }}>{children}</LocaleContext.Provider>;
 }
 
 export function useLocale() {
@@ -141,11 +130,3 @@ export function useLocale() {
   return context;
 }
 
-export function LocaleSwitcher() {
-  const { locale, setLocale, t } = useLocale();
-  return <div className="inline-flex h-10 items-center border border-[color:var(--line)] text-xs text-[#d5c18b]" aria-label="Language selector">
-    <button type="button" onClick={() => setLocale("es-MX")} className={locale === "es-MX" ? "h-full bg-[#5e4722]/30 px-2 text-[#efd79c]" : "h-full px-2 hover:text-[#efd79c]"}>{t("locale.es")}</button>
-    <span className="text-[#665c4b]">/</span>
-    <button type="button" onClick={() => setLocale("en-US")} className={locale === "en-US" ? "h-full bg-[#5e4722]/30 px-2 text-[#efd79c]" : "h-full px-2 hover:text-[#efd79c]"}>{t("locale.en")}</button>
-  </div>;
-}
