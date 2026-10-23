@@ -39,6 +39,7 @@ import {
   Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useLocale } from "./locale-provider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   imageSource,
@@ -158,6 +159,9 @@ export default function Compendium({
 }: {
   initialCatalogue: CatalogueResponse;
 }) {
+  const { t } = useLocale();
+  const sectionLabel = (label: string) => t(`section.${label}`);
+  const groupLabel = (label: string) => t(`group.${label}`);
   const [entries, setEntries] = useState(initialCatalogue.data);
   const [selectedId, setSelectedId] = useState(
     initialCatalogue.data[0]?.id ?? "",
@@ -169,6 +173,7 @@ export default function Compendium({
   const [loading, setLoading] = useState(false);
   const [isCinematic, setIsCinematic] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [linkedEntry, setLinkedEntry] = useState<CatalogueEntry | null>(null);
   const [navigationStack, setNavigationStack] = useState<NavigationSnapshot[]>(
     [],
@@ -355,6 +360,7 @@ export default function Compendium({
   const logout = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     setIsAdmin(false);
+    setIsAccountMenuOpen(false);
   };
   return (
     <>
@@ -390,7 +396,7 @@ export default function Compendium({
               }
             >
               <House />
-              Inicio
+              {t("nav.home")}
             </button>
             {groups.map((group) => (
               <div className="nav-group" key={group.label}>
@@ -404,7 +410,7 @@ export default function Compendium({
                   }
                 >
                   <group.icon />
-                  <span>{group.label}</span>
+                  <span>{groupLabel(group.label)}</span>
                   <ChevronDown
                     className={
                       openGroups[group.label]
@@ -426,7 +432,7 @@ export default function Compendium({
                         }
                       >
                         <section.icon />
-                        {section.label}
+                        {sectionLabel(section.label)}
                       </button>
                     ))}
                   </div>
@@ -456,7 +462,7 @@ export default function Compendium({
                     : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
                 }
               >
-                Inicio
+              {t("nav.home")}
               </button>
               <button
                 onClick={() => selectSection("Jefes")}
@@ -466,14 +472,14 @@ export default function Compendium({
                     : "border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
                 }
               >
-                Compendio
+                {t("nav.compendium")}
               </button>
               <a
                 href="/guides"
                 className="inline-flex items-center gap-1 border-b border-transparent px-2.5 py-2 text-sm text-[#afa38d] transition hover:border-[#cfb66f] hover:bg-[#5e4722]/20 hover:text-[#eed498]"
               >
                 <BookOpen className="size-3.5" />
-                Guías
+                {t("nav.guides")}
               </a>
             </nav>
             <label className="flex h-10 w-[min(325px,42vw)] items-center gap-2 border border-[color:var(--line)] bg-[#040c0d]/60 px-3.5">
@@ -494,18 +500,30 @@ export default function Compendium({
                   setQuery(value);
                   setPage(0);
                 }}
-                placeholder="Buscar en la enciclopedia..."
+                placeholder={t("search.placeholder")}
               />
             </label>
             {isAdmin ? (
-              <>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsAccountMenuOpen((open) => !open)}
+                  className="inline-flex h-10 items-center gap-2 border border-[color:var(--line)] px-3 text-sm text-[#d5c18b] transition-colors hover:border-[color:var(--gold)] hover:text-[#efd79c]"
+                  aria-expanded={isAccountMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  <LayoutDashboard className="size-4" />
+                  <span className="hidden xl:inline">{t("nav.account")}</span>
+                  <ChevronDown className={isAccountMenuOpen ? "size-3 rotate-180 transition-transform" : "size-3 transition-transform"} />
+                </button>
+                <div className={isAccountMenuOpen ? "absolute right-0 top-[calc(100%+0.5rem)] z-30 min-w-48 border border-[color:var(--line)] bg-[#091314] p-1 shadow-2xl" : "hidden"} role="menu">
                 <a
                   href="/admin"
                   className="inline-flex h-10 items-center gap-2 border border-[color:var(--line)] px-3 text-sm text-[#d5c18b] transition-colors hover:border-[color:var(--gold)] hover:text-[#efd79c]"
                   aria-label="Ir al panel de administración"
                 >
                   <LayoutDashboard className="size-4" />
-                  <span className="hidden xl:inline">Panel</span>
+                  <span>{t("nav.administration")}</span>
                 </a>
                 <button
                   onClick={logout}
@@ -513,9 +531,10 @@ export default function Compendium({
                   aria-label="Cerrar sesión"
                 >
                   <LogOut className="size-4" />
-                  <span className="hidden xl:inline">Salir</span>
+                  <span>{t("nav.signOut")}</span>
                 </button>
-              </>
+                </div>
+              </div>
             ) : (
               <a
                 href="/admin/login"
@@ -523,7 +542,7 @@ export default function Compendium({
                 aria-label="Acceso de administrador"
               >
                 <KeyRound className="size-4" />
-                <span className="hidden xl:inline">Admin</span>
+                <span className="hidden xl:inline">{t("nav.signIn")}</span>
               </a>
             )}
           </header>
@@ -536,7 +555,7 @@ export default function Compendium({
                   onClick={() => selectSection(section.label)}
                   className={activeSection === section.label ? "active" : ""}
                 >
-                  {section.label}
+                  {sectionLabel(section.label)}
                 </button>
               ))}
           </div>
@@ -551,13 +570,13 @@ export default function Compendium({
               <aside className="catalogue panel">
                 <div className="section-heading">
                   <h2>
-                    {activeSection === "Todos" ? "Resultados" : activeSection}
+                    {activeSection === "Todos" ? t("catalogue.results") : sectionLabel(activeSection)}
                   </h2>
                 </div>
-                <p className="eyebrow">REGISTROS DISPONIBLES</p>
+                <p className="eyebrow">{t("catalogue.available")}</p>
                 <div className="boss-list">
                   {loading ? (
-                    <p className="no-results">Invocando registros…</p>
+                    <p className="no-results">{t("catalogue.loading")}</p>
                   ) : (
                     entries.map((entry) => (
                       <button
@@ -584,7 +603,7 @@ export default function Compendium({
                   )}
                   {!loading && !entries.length && (
                     <p className="no-results">
-                      No hay registros para esta sección.
+                      {t("catalogue.empty")}
                     </p>
                   )}
                 </div>
@@ -691,10 +710,16 @@ function Subject({
   section: string;
   onBack?: () => void;
 }) {
+  const { t } = useLocale();
+  const category = entry.category || entry.type || section;
+  const categoryLabel =
+    category === section || (section === "Jefes" && category === "Jefe")
+      ? t(`section.${section}`)
+      : category;
   return (
     <section className="subject panel">
       <div className="subject-title">
-        <p className="eyebrow">REGISTRO DE {section.toUpperCase()}</p>
+        <p className="eyebrow">{t("catalogue.recordOf")} {t(`section.${section}`).toUpperCase()}</p>
         {onBack && (
           <button
             type="button"
@@ -702,11 +727,11 @@ function Subject({
             className="mb-3 inline-flex items-center gap-1 text-sm text-[#d8bc7f] hover:text-[#f0d99f]"
           >
             <ArrowLeft className="size-4" />
-            Volver
+            {t("catalogue.back")}
           </button>
         )}
         <h1>{entry.name}</h1>
-        <span>{entry.category || entry.type || section}</span>
+        <span>{categoryLabel}</span>
       </div>
       <div className="portrait-stage">
         <div className="halo" />
@@ -720,7 +745,7 @@ function Subject({
         />
       </div>
       <div className="portrait-caption">
-        <span>Registro del compendio</span>
+        <span>{t("catalogue.record")}</span>
       </div>
     </section>
   );
@@ -735,8 +760,10 @@ function Details({
   section: string;
   onOpenReference: (reference: RecordReference) => void;
 }) {
+  const { t } = useLocale();
   const [activeTab, setActiveTab] = useState("Información");
   useEffect(() => setActiveTab("Información"), [entry.id]);
+  const tabLabel = (tab: string) => ({ Información: t("detail.info"), Estrategia: t("detail.strategy"), Galería: t("detail.gallery"), Ubicación: t("detail.location") }[tab] ?? tab);
   const hasStrategy =
     section === "Jefes" || entry.guide?.status === "published";
   const tabs =
@@ -758,7 +785,7 @@ function Details({
         <TabsList variant="line" className="tabs">
           {tabs.map((tab) => (
             <TabsTrigger key={tab} value={tab}>
-              {tab}
+              {tabLabel(tab)}
             </TabsTrigger>
           ))}
         </TabsList>
@@ -766,7 +793,7 @@ function Details({
           <div className="detail-content">
             <p className="description">
               {entry.description ||
-                "No hay descripción disponible para este registro."}
+                t("detail.noDescription")}
             </p>
             <InfoRows entry={entry} section={section} />
             {(section === "Armas" ||
@@ -792,14 +819,14 @@ function Details({
           <TabsContent value="Ubicación">
             <div className="detail-content">
               <p className="description">
-                {friendlyValue(entry.location, "Ubicación no registrada")}
+                {friendlyValue(entry.location, t("detail.locationMissing"))}
               </p>
               <div className="map-card">
                 <MapPin />
                 <p>
-                  Mapa y ruta detallada
+                  {t("detail.mapRoute")}
                   <br />
-                  <small>Disponible al publicar la guía</small>
+                  <small>{t("detail.guidePending")}</small>
                 </p>
                 <ChevronRight />
               </div>
@@ -825,7 +852,7 @@ function Details({
                 }}
                 alt={entry.name}
               />
-              <p>Imagen principal del registro</p>
+              <p>{t("detail.mainImage")}</p>
             </div>
           </div>
         </TabsContent>
@@ -869,6 +896,7 @@ function ClassInformation({
   entry: CatalogueEntry;
   onOpenReference: (reference: RecordReference) => void;
 }) {
+  const { t } = useLocale();
   const stats =
     entry.stats && typeof entry.stats === "object" ? entry.stats : null;
   const equipment = entry.startingEquipment
@@ -886,11 +914,11 @@ function ClassInformation({
       )}
       {stats && (
         <div className="border border-[color:var(--line)] p-4">
-          <h3 className="text-lg text-[#e5cf99]">Estadísticas iniciales</h3>
+          <h3 className="text-lg text-[#e5cf99]">{t("class.stats")}</h3>
           <div className="mt-3 grid grid-cols-2 gap-px bg-[color:var(--line)] sm:grid-cols-3">
             {Object.entries(classStatLabels).map(([key, label]) => (
               <div key={key} className="flex items-center justify-between bg-[#0b1718] px-3 py-2 text-sm">
-                <span className="text-[#b7a476]">{label}</span>
+                <span className="text-[#b7a476]">{t(`stat.${key}`)}</span>
                 <strong className="text-[#ead9ad]">{stats[key as keyof typeof stats] ?? "—"}</strong>
               </div>
             ))}
@@ -902,12 +930,12 @@ function ClassInformation({
       )}
       {!!equipment.length && (
         <div className="border border-[color:var(--line)] p-4">
-          <h3 className="text-lg text-[#e5cf99]">Equipo inicial</h3>
+          <h3 className="text-lg text-[#e5cf99]">{t("class.equipment")}</h3>
           {entry.startingEquipmentSetName && <p className="mt-1 text-sm text-[#b7a476]">{entry.startingEquipmentSetName}</p>}
-          <div className="mt-4 grid gap-4">{equipment.map(([category, records]) => <div key={category}><h4 className="text-sm text-[#d5c18b]">{equipmentCategoryLabels[category] || category}</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{records.map((record, index) => <button type="button" key={`${record.collection}-${record.id}-${index}`} onClick={() => record.id && onOpenReference(record)} className="flex items-center gap-3 border border-[color:var(--line)] bg-black/10 p-2 text-left transition hover:border-[#d5c18b]"><img src={imageSource(record.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt="" className="size-12 border border-[color:var(--line)] object-cover" /><span className="min-w-0"><span className="block truncate text-sm text-[#ead9ad]">{record.name || "Registro relacionado"}{record.quantity && record.quantity > 1 ? ` ×${record.quantity}` : ""}</span><span className="text-xs text-[#b7a476]">Ver detalle</span></span></button>)}</div></div>)}</div>
+          <div className="mt-4 grid gap-4">{equipment.map(([category, records]) => <div key={category}><h4 className="text-sm text-[#d5c18b]">{t(`equipment.${category}`) === `equipment.${category}` ? category : t(`equipment.${category}`)}</h4><div className="mt-2 grid gap-2 sm:grid-cols-2">{records.map((record, index) => <button type="button" key={`${record.collection}-${record.id}-${index}`} onClick={() => record.id && onOpenReference(record)} className="flex items-center gap-3 border border-[color:var(--line)] bg-black/10 p-2 text-left transition hover:border-[#d5c18b]"><img src={imageSource(record.image)} onError={(event) => { event.currentTarget.src = imageSource(); }} alt="" className="size-12 border border-[color:var(--line)] object-cover" /><span className="min-w-0"><span className="block truncate text-sm text-[#ead9ad]">{record.name || t("class.related")}{record.quantity && record.quantity > 1 ? ` ×${record.quantity}` : ""}</span><span className="text-xs text-[#b7a476]">{t("class.viewDetail")}</span></span></button>)}</div></div>)}</div>
         </div>
       )}
-      {entry.startingInventoryVerification?.status === "partial" && <p className="text-sm text-[#b7a476]">Inventario en verificación</p>}
+      {entry.startingInventoryVerification?.status === "partial" && <p className="text-sm text-[#b7a476]">{t("class.verify")}</p>}
     </section>
   );
 }
@@ -1100,6 +1128,7 @@ function BossInformation({
   entry: CatalogueEntry;
   onOpenReference: (reference: RecordReference) => void;
 }) {
+  const { t } = useLocale();
   const location = entry.location ?? entry.region;
   const locationReference =
     isReference(entry.location) && isNavigable(entry.location)
@@ -1108,7 +1137,7 @@ function BossInformation({
   return (
     <div className="boss-information">
       <section>
-        <h3>Ubicación</h3>
+        <h3>{t("detail.location")}</h3>
         <div
           className={locationReference ? "map-card linked-card" : "map-card"}
           onClick={
@@ -1129,13 +1158,13 @@ function BossInformation({
         >
           <MapPin />
           <p>
-            {friendlyValue(location, "Ubicación no registrada")}
+            {friendlyValue(location, t("detail.locationMissing"))}
             <small>
               {entry.location
-                ? "Ubicación documentada"
+                ? t("boss.locationDocumented")
                 : entry.region
-                  ? "Región documentada"
-                  : "Aún no documentada"}
+                  ? t("boss.regionDocumented")
+                  : t("boss.notDocumented")}
             </small>
           </p>
           {locationReference ? (
@@ -1144,7 +1173,7 @@ function BossInformation({
         </div>
       </section>
       <section>
-        <h3>Recompensas</h3>
+        <h3>{t("boss.rewards")}</h3>
         {entry.drops?.length ? (
           <div className="rewards">
             {entry.drops.map((drop, index) => {
@@ -1172,7 +1201,7 @@ function BossInformation({
                   <p>
                     {friendlyValue(drop, "Sin recompensa conocida")}
                     <small>
-                      {reference ? "Abrir registro" : "Recompensa documentada"}
+                      {reference ? t("boss.openRecord") : t("boss.rewardDocumented")}
                     </small>
                   </p>
                   {reference ? (
@@ -1184,7 +1213,7 @@ function BossInformation({
           </div>
         ) : (
           <p className="inline-empty">
-            Sin recompensas registradas para este jefe.
+            {t("boss.noRewards")}
           </p>
         )}
       </section>
@@ -1199,12 +1228,13 @@ function InfoRows({
   entry: CatalogueEntry;
   section: string;
 }) {
+  const { t } = useLocale();
   const rows = getInfoRows(entry, section);
   if (!rows.length)
     return (
       <EmptyTab
-        title="Datos en preparación"
-        text="Este tipo de registro no tiene atributos adicionales disponibles todavía."
+        title={t("empty.title")}
+        text={t("empty.copy")}
       />
     );
   return (
@@ -1213,7 +1243,7 @@ function InfoRows({
         <DataRow
           key={row.label}
           icon={row.icon}
-          label={row.label}
+          label={t(`info.${row.label}`)}
           value={row.value}
         />
       ))}
@@ -1355,17 +1385,18 @@ function EquipmentTables({
   entry: CatalogueEntry;
   section: string;
 }) {
+  const { t } = useLocale();
   return (
     <div className="equipment-tables">
       {section === "Armaduras" ? (
         <>
           <AttributeTable
-            title="Negación de daño"
+            title={t("table.damageNegation")}
             icon={Shield}
             values={entry.dmgNegation}
           />
           <AttributeTable
-            title="Resistencias"
+            title={t("table.resistances")}
             icon={Heart}
             values={entry.resistance}
           />
@@ -1373,17 +1404,17 @@ function EquipmentTables({
       ) : (
         <>
           <AttributeTable
-            title="Poder de ataque"
+            title={t("table.attackPower")}
             icon={Sword}
             values={entry.attack}
           />
           <AttributeTable
-            title="Defensa"
+            title={t("table.defense")}
             icon={Shield}
             values={entry.defence}
           />
           <AttributeTable
-            title="Escalado"
+            title={t("table.scaling")}
             icon={Sparkles}
             values={entry.scalesWith}
             scaling
@@ -1404,6 +1435,7 @@ function AttributeTable({
   values?: Attribute[];
   scaling?: boolean;
 }) {
+  const { t } = useLocale();
   const rows =
     values?.filter((value) =>
       scaling ? Boolean(value.scaling) : value.amount !== undefined,
@@ -1422,7 +1454,7 @@ function AttributeTable({
             <div className="attribute-table-row" key={value.name}>
               <span>
                 <StatIcon />
-                {statName(value.name)}
+                {t(`stat.${value.name}`) === `stat.${value.name}` ? statName(value.name) : t(`stat.${value.name}`)}
               </span>
               <strong>{scaling ? value.scaling : value.amount}</strong>
             </div>
@@ -1479,6 +1511,7 @@ function AttributeTokens({
   values?: Attribute[];
   includeZero?: boolean;
 }) {
+  const { t } = useLocale();
   const known =
     values?.filter(
       (value) =>
@@ -1495,14 +1528,14 @@ function AttributeTokens({
         return (
           <span className="stat-token" key={value.name}>
             <Icon />
-            <span>{statName(value.name)}</span>
+            <span>{t(`stat.${value.name}`) === `stat.${value.name}` ? statName(value.name) : t(`stat.${value.name}`)}</span>
             <b>{amount}</b>
           </span>
         );
       })}
     </span>
   ) : (
-    <span className="value-muted">Sin requisitos</span>
+    <span className="value-muted">{t("attribute.none")}</span>
   );
 }
 function statName(name: string) {
@@ -1566,49 +1599,47 @@ function HomePanel({
   onOpenArsenal: () => void;
   onOpenClasses: () => void;
 }) {
+  const { t } = useLocale();
   return (
     <section className="home-panel panel">
       <div className="home-copy">
-        <p className="eyebrow">EL ARCHIVO DE LAS TIERRAS INTERMEDIAS</p>
-        <h1>La Gracia aún llama a los Sinluz.</h1>
-        <p>
-          Un compendio para recorrer las Tierras Intermedias: consulta enemigos,
-          equipo, áreas y prepara tu travesía antes de cruzar la niebla.
-        </p>
+        <p className="eyebrow">{t("home.eyebrow")}</p>
+        <h1>{t("home.title")}</h1>
+        <p>{t("home.copy")}</p>
         <div className="home-actions">
           <Button onClick={onOpenBosses}>
-            Explorar jefes <ChevronRight />
+            {t("home.exploreBosses")} <ChevronRight />
           </Button>
-          <span>Archivo en expansión</span>
+          <span>{t("home.expanding")}</span>
         </div>
       </div>
       <div className="home-stats">
         <div>
           <strong>13</strong>
-          <span>catálogos</span>
+          <span>{t("home.catalogues")}</span>
         </div>
         <div>
           <strong>100+</strong>
-          <span>registros por sección</span>
+          <span>{t("home.records")}</span>
         </div>
         <div>
-          <strong>Pronto</strong>
-          <span>guías y misiones</span>
+          <strong>{t("home.comingSoon")}</strong>
+          <span>{t("home.guidesMissions")}</span>
         </div>
       </div>
       <div className="home-sections">
         <article>
           <button onClick={onOpenBosses} className="p-0 text-left">
             <Crown />
-            <h2>Jefes</h2>
-            <p>Recompensas, vida y ubicación.</p>
+            <h2>{t("home.bosses")}</h2>
+            <p>{t("home.bossesCopy")}</p>
           </button>
         </article>
         <article>
           <button onClick={onOpenArsenal} className="p-0 text-left">
             <Sword />
-            <h2>Arsenal</h2>
-            <p>Armas, escudos y munición.</p>
+            <h2>{t("home.arsenal")}</h2>
+            <p>{t("home.arsenalCopy")}</p>
           </button>
         </article>
         <article>
@@ -1618,15 +1649,15 @@ function HomePanel({
             aria-label="Explorar guías"
           >
             <MapPin />
-            <h2>Guías</h2>
-            <p>Rutas y misiones hechas por la comunidad.</p>
+            <h2>{t("home.guides")}</h2>
+            <p>{t("home.guidesCopy")}</p>
           </a>
         </article>
         <article>
           <button onClick={onOpenClasses} className="p-0 text-left">
             <Dumbbell />
-            <h2>Clases</h2>
-            <p>Orígenes, atributos y equipo inicial.</p>
+            <h2>{t("home.classes")}</h2>
+            <p>{t("home.classesCopy")}</p>
           </button>
         </article>
       </div>

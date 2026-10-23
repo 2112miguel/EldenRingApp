@@ -2,6 +2,7 @@
 
 import { ArrowLeft, ArrowRight, BookOpen, ImageIcon, MapPin, ScrollText } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useLocale } from "../components/locale-provider";
 
 type GuideCard = {
   id: string;
@@ -38,6 +39,7 @@ function coverFor(guide: GuideCard) {
 }
 
 export default function GuidesPage() {
+  const { t } = useLocale();
   const [guides, setGuides] = useState<GuideCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
@@ -83,17 +85,17 @@ export default function GuidesPage() {
         <div className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(4,13,14,.96),rgba(5,16,17,.76),rgba(4,13,14,.94))]" />
         <header className="mx-auto flex max-w-6xl flex-wrap items-end justify-between gap-6">
           <div className="max-w-2xl">
-            <p className="flex items-center gap-2 text-xs font-medium tracking-[.2em] text-[#cfb66f]"><ScrollText className="size-4" /> CRÓNICAS DE LAS TIERRAS INTERMEDIAS</p>
-            <h1 className="mt-3 text-4xl text-[#f1dfaf] md:text-5xl">Guías</h1>
-            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#c8baa0] md:text-base">Estrategias, rutas y notas de viaje para avanzar con propósito entre la niebla.</p>
+            <p className="flex items-center gap-2 text-xs font-medium tracking-[.2em] text-[#cfb66f]"><ScrollText className="size-4" /> {t("guides.eyebrow")}</p>
+            <h1 className="mt-3 text-4xl text-[#f1dfaf] md:text-5xl">{t("guides.title")}</h1>
+            <p className="mt-4 max-w-xl text-sm leading-relaxed text-[#c8baa0] md:text-base">{t("guides.copy")}</p>
           </div>
-          <a href="/" className="inline-flex items-center gap-2 border border-[color:var(--line)] bg-[#071011]/70 px-4 py-2.5 text-sm text-[#d5c18b] transition hover:border-[#cfb66f] hover:text-[#f1dfaf]"><ArrowLeft className="size-4" /> Volver al inicio</a>
+          <a href="/" className="inline-flex items-center gap-2 border border-[color:var(--line)] bg-[#071011]/70 px-4 py-2.5 text-sm text-[#d5c18b] transition hover:border-[#cfb66f] hover:text-[#f1dfaf]"><ArrowLeft className="size-4" /> {t("guides.back")}</a>
         </header>
       </section>
 
       <section className="mx-auto max-w-6xl px-5 py-8 md:px-8 md:py-12">
-        {loading ? <p className="text-[#b7a476]">Cargando guías…</p> : null}
-        {!loading && guides.length === 0 ? <p className="border border-dashed border-[color:var(--line)] p-5 text-[#b7a476]">Aún no hay guías publicadas.</p> : null}
+        {loading ? <p className="text-[#b7a476]">{t("guides.loading")}</p> : null}
+        {!loading && guides.length === 0 ? <p className="border border-dashed border-[color:var(--line)] p-5 text-[#b7a476]">{t("guides.empty")}</p> : null}
         <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
           {guides.map((guide) => {
             const cover = coverFor(guide);
@@ -112,21 +114,21 @@ export default function GuidesPage() {
                 <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(4,12,13,.08),rgba(4,12,13,.96)_88%)]" />
                 <div className="relative flex min-h-80 flex-col p-6">
                   <div className="flex items-start justify-between gap-3">
-                    <span className="inline-flex items-center gap-2 border border-[#ae914d]/70 bg-[#071011]/75 px-2.5 py-1 text-[10px] font-medium tracking-[.16em] text-[#d8bf77]">{guide.subject ? <MapPin className="size-3.5" /> : <BookOpen className="size-3.5" />}{guide.subject?.collection ?? "GUÍA GENERAL"}</span>
+                    <span className="inline-flex items-center gap-2 border border-[#ae914d]/70 bg-[#071011]/75 px-2.5 py-1 text-[10px] font-medium tracking-[.16em] text-[#d8bf77]">{guide.subject ? <MapPin className="size-3.5" /> : <BookOpen className="size-3.5" />}{guide.subject?.collection ?? t("guides.general")}</span>
                     {!cover && <ImageIcon className="size-6 text-[#b99745]/70" aria-hidden="true" />}
                   </div>
                   <div className="mt-auto">
                     <h2 className="max-w-md text-2xl leading-tight text-[#f1dfaf]">{guide.title}</h2>
                     {guide.subject?.name && <p className="mt-2 text-sm text-[#d9c18a]">{guide.subject.name}</p>}
                     {guide.summary && <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-[#d1c4a8]">{guide.summary}</p>}
-                    <span className="mt-5 inline-flex items-center gap-2 text-sm text-[#d8bf77]">Leer guía <ArrowRight className="size-4" /></span>
+                    <span className="mt-5 inline-flex items-center gap-2 text-sm text-[#d8bf77]">{t("guides.read")} <ArrowRight className="size-4" /></span>
                   </div>
                 </div>
               </a>
             );
           })}
         </div>
-        {total > limit && <div className="mt-8 flex items-center justify-between text-sm text-[#b7a476]"><button type="button" disabled={page === 0} onClick={() => setPage((current) => current - 1)} className="border border-[color:var(--line)] px-3 py-2 transition hover:border-[#cfb66f] disabled:opacity-40">Anterior</button><span>Página {page + 1} de {pages}</span><button type="button" disabled={page >= pages - 1} onClick={() => setPage((current) => current + 1)} className="border border-[color:var(--line)] px-3 py-2 transition hover:border-[#cfb66f] disabled:opacity-40">Siguiente</button></div>}
+        {total > limit && <div className="mt-8 flex items-center justify-between text-sm text-[#b7a476]"><button type="button" disabled={page === 0} onClick={() => setPage((current) => current - 1)} className="border border-[color:var(--line)] px-3 py-2 transition hover:border-[#cfb66f] disabled:opacity-40">{t("pagination.previous")}</button><span>{t("pagination.page")} {page + 1} / {pages}</span><button type="button" disabled={page >= pages - 1} onClick={() => setPage((current) => current + 1)} className="border border-[color:var(--line)] px-3 py-2 transition hover:border-[#cfb66f] disabled:opacity-40">{t("pagination.next")}</button></div>}
       </section>
     </main>
   );
